@@ -309,6 +309,17 @@ class UtilTestCase(unittest.TestCase):
                 with util.Lockfile(fn, timeout=0.5, timewarn=0.1):
                     pass
 
+    def test_short_to_list(self):
+
+        for n in range(20):
+            it = util.short_to_list(10, iter(range(n)))
+            if n > 10:
+                assert not isinstance(it, list)
+            else:
+                assert isinstance(it, list)
+
+            assert list(it) == list(range(n))
+
 
 if __name__ == "__main__":
     util.setup_logging('test_util', 'info')
