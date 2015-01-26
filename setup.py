@@ -534,6 +534,12 @@ subpacknames = [
     'pyrocko.scenario.targets',
     'pyrocko.scenario.sources',
     'pyrocko.obspy_compat',
+    'pyrocko.squirrel',
+    'pyrocko.squirrel.io',
+    'pyrocko.squirrel.io.backends',
+    'pyrocko.squirrel.client',
+    'pyrocko.squirrel.tool',
+    'pyrocko.squirrel.tool.commands',
 ]
 
 cmdclass = {
@@ -702,9 +708,10 @@ setup(
              'automap = pyrocko.apps.automap:main',
              'hamster = pyrocko.apps.hamster:main',
              'jackseis = pyrocko.apps.jackseis:main',
-             'colosseo = pyrocko.apps.colosseo:main'],
+             'colosseo = pyrocko.apps.colosseo:main',
+             'squirrel = pyrocko.apps.squirrel:main'],
         'gui_scripts':
-            ['snuffler = pyrocko.apps.snuffler:main']
+            ['snuffler = pyrocko.apps.snuffler:main'],
     },
 
     package_data={
