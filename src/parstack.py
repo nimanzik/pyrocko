@@ -30,7 +30,7 @@ def parstack(arrays, offsets, shifts, weights, method,
         arrays, offsets, shifts, weights, method,
         lengthout, offsetout, result, nparallel)
 
-    if method == 0:
+    if method in (0, 2):
         nsamps = result.size / nshifts
         result = result.reshape((nshifts, nsamps))
 
@@ -82,7 +82,7 @@ def parstack_numpy(
             result[istart_r+jstart:istart_r+jstop] += \
                 arrays[iarray][jstart:jstop] * weight
 
-    if method == 0:
+    if method in (0, 2):
         return result, offsetout
     elif method == 1:
         return num.amax(result.reshape((nshifts, nsamp)), axis=1), offsetout

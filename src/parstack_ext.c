@@ -13,6 +13,9 @@
 
 #define CHUNKSIZE 10
 
+#define SLIMIT (INT_MAX / 4)
+#define inlimits(i) (-SLIMIT <= (i) && (i) <= SLIMIT)
+
 static PyObject *ParstackError;
 
 
@@ -111,8 +114,8 @@ int parstack(
         int nparallel) {
 
 	(void) nparallel;
-    int imin, istart, ishift;
-    size_t iarray, nsamp, i;
+    int imin, istart, ishift, kmin, kmax, k;
+    size_t iarray, jarray, nsamp, i;
     double weight;
     int chunk;
     double *temp;
@@ -147,6 +150,40 @@ int parstack(
                 weight = weights[ishift*narrays + iarray];
                 for (i=(size_t)max(0, imin - istart); i<(size_t)max(0, min(nsamp - istart + imin, lengths[iarray])); i++) {
                     result[ishift*nsamp + istart-imin+i] += arrays[iarray][i] * weight;
+                }
+            }
+        }
+        }
+    } else if (method == 2) {
+	#if defined(_OPENMP)
+        #pragma omp parallel private(ishift, iarray, jarray, i, istart, weight, k, kmax, kmin) num_threads(nparallel)
+	#endif
+        {
+
+	#if defined(_OPENMP)
+        #pragma omp for schedule(dynamic, chunk) nowait
+	#endif
+        for (ishift=0; ishift<(int)nshifts; ishift++) {
+            for (iarray=0; iarray<narrays; iarray++) {
+                for (jarray=iarray+1; jarray<narrays; jarray++) {
+                    kmax = min(
+                            min(
+                                offsets[iarray] + shifts[ishift*narrays + iarray] + lengths[iarray],
+                                offsets[jarray] + shifts[ishift*narrays + jarray] + lengths[jarray]),
+                                imin + nsamp);
+
+                    kmin = max(
+                            max(
+                                offsets[iarray] + shifts[ishift*narrays + iarray],
+                                offsets[jarray] + shifts[ishift*narrays + jarray]),
+                                imin);
+
+                    for (k=kmin; k<kmax; k++) {
+                        result[ishift*nsamp + k-imin] += fabs(
+                                arrays[iarray][k - (offsets[iarray] + shifts[ishift*narrays + iarray])] -
+                                arrays[jarray][k - (offsets[jarray] + shifts[ishift*narrays + jarray])]
+                                );
+                    }
                 }
             }
         }
@@ -308,7 +345,7 @@ static PyObject* w_parstack(PyObject *dummy, PyObject *args) {
         lengthout = (size_t)lengthout_arg;
     }
 
-    if (method == 0) {
+    if (method == 0 || method == 2) {
         array_dims[0] = nshifts * lengthout;
     } else {
         array_dims[0] = nshifts;
@@ -336,6 +373,26 @@ static PyObject* w_parstack(PyObject *dummy, PyObject *args) {
         }
     }
     cresult = PyArray_DATA((PyArrayObject*)result);
+
+    for (i=0; i<nshifts*narrays; i++) {
+        if (!inlimits(cshifts[i])) {
+            PyErr_SetString(ParstackError, "shift values too large");
+            free(carrays);
+            free(clengths);
+            Py_DECREF(result);
+            return NULL;
+        }
+    }
+
+    for (i=0; i<narrays; i++) {
+        if (!(inlimits(coffsets[i]) && clengths[i] <= SLIMIT)) {
+            PyErr_SetString(ParstackError, "offsets or lengths too large");
+            free(carrays);
+            free(clengths);
+            Py_DECREF(result);
+            return NULL;
+        }
+    }
 
     err = parstack(narrays, carrays, coffsets, clengths, nshifts, cshifts,
                    cweights, method, lengthout, offsetout, cresult, nparallel);

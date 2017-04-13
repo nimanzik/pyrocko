@@ -315,6 +315,24 @@ class ParstackTestCase(unittest.TestCase):
         axes.plot(source.east_shift/km, source.north_shift/km, 'o')
         plt.show()
 
+    def test_parstack_asd(self):
+        narrays = 5
+        n = 4
+        arrays = [
+            num.arange(n, dtype=num.float)
+            for j in xrange(narrays)
+        ]
+
+        arrays[0] *= 2
+        arrays[1] *= 3
+        offsets = num.zeros(narrays).astype(num.int32)
+        nshifts = 4
+        shifts = num.zeros((nshifts, narrays)).astype(num.int32)
+        weights = num.zeros((nshifts, narrays))
+
+        r1, o1 = parstack(
+            arrays, offsets, shifts, weights, method=2,
+            impl='openmp', nparallel=3)
 
 if __name__ == '__main__':
     util.setup_logging('test_parstack', 'warning')
