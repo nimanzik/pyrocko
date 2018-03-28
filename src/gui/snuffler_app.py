@@ -22,6 +22,7 @@ import pickle
 from pyrocko.streaming import serial_hamster
 from pyrocko.streaming import slink
 from pyrocko.streaming import edl
+from pyrocko.streaming import udp
 
 from pyrocko import pile            # noqa
 from pyrocko import util            # noqa
@@ -88,6 +89,16 @@ class AcquisitionThread(qc.QThread):
         self.queue[:] = []
         self.mutex.unlock()
         return items
+
+
+class UDPAcquisition(
+        udp.UDPStream, AcquisitionThread):
+    def __init__(self, *args, **kwargs):
+        udp.UDPStream.__init__(self, *args, **kwargs)
+        AcquisitionThread.__init__(self)
+
+    def got_trace(self, tr):
+        AcquisitionThread.got_trace(self, tr)
 
 
 class SlinkAcquisition(
@@ -158,6 +169,7 @@ def setup_acquisition_sources(args):
         mus = re.match(r'hb628://([^:?]+)(\?([^?]+))?', arg)
         msc = re.match(r'school://([^:]+)', arg)
         med = re.match(r'edl://([^:]+)', arg)
+        mud = re.match(r'udp://([^:]+):(\d*)', arg)
         if msl:
             host = msl.group(1)
             port = msl.group(3)
@@ -218,8 +230,14 @@ def setup_acquisition_sources(args):
             port = med.group(1)
             edl = EDLAcquisition(port=port)
             sources.append(edl)
+        elif mud:
+            print('Listening to udp')
+            mcast_group = mud.group(1)
+            port = mud.group(2)
+            udp = UDPAcquisition(mcast_group, port=port)
+            sources.append(udp)
 
-        if msl or mca or mus or msc or med:
+        if msl or mca or mus or msc or med or mud:
             args.pop(iarg)
         else:
             iarg += 1
