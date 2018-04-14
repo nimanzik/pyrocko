@@ -27,7 +27,7 @@ class UDPCollector(threading.Thread):
               % (self.mcast_grp, self.port))
         while True:
             data = self.socket.recv(1024)
-            self.queue.put_nowait(data)
+            self.queue.put(data)
 
     @staticmethod
     def get_socket(mcast_grp, port):
@@ -62,34 +62,39 @@ class UDPStream(object):
 
     @staticmethod
     def extract_trace(data):
-        hdr = comp, nsamples, sampling, t0 = struct.unpack('chhd', data[:16])
-        data = data[16:]
-        return hdr, data
+        header = data[:28]
+        nsamples, sampling_rate, t0 = struct.unpack('hhd', header[12:])
+        header = {
+            'nsl': header[:12],
+            'network': header[0:3].decode().strip(),
+            'station': header[3:6].decode().strip(),
+            'location': header[6:9].decode().strip(),
+            'channel': header[9:12].decode().strip(),
+            'deltat': 1. / sampling_rate,
+            'tmin': t0
+        }
+        return header, data[28:]
 
     def process(self):
         traces = []
-        if self.udpqueue.qsize() < 40:
+        if self.udpqueue.qsize() < 20:
             return True
 
         for ip in range(self.udpqueue.qsize()):
             traces.append(self.extract_trace(self.udpqueue.get()))
 
-        channels = set([tr[0][0] for tr in traces])
-        for cha in channels:
-            trs = [tr for tr in traces if tr[0][0] == cha]
-            comp, _, sampling, t0 = trs[0][0]
-
+        codes = set([tr[0]['nsl'] for tr in traces])
+        for code in codes:
+            trs = [tr for tr in traces if tr[0]['nsl'] == code]
             data = b''.join([tr[1] for tr in trs])
             data = num.frombuffer(data)
 
+            header = trs[0][0].copy()
+            del header['nsl']
+
             tr = trace.Trace(
-                network='UD',
-                station='S1',
-                location='NT',
-                channel='SH' + comp.decode().upper(),
-                tmin=t0,
-                deltat=1./sampling,
-                ydata=data)
+                ydata=data,
+                **header)
             self.got_trace(tr)
 
         return True
