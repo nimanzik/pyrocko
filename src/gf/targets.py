@@ -327,6 +327,27 @@ class SatelliteTarget(StaticTarget):
                                     theta=self.theta, phi=self.phi,
                                     nrows=self.nrows, ncols=self.ncols)
 
+    @classmethod
+    def from_kite_scene(cls, scene):
+        try:
+            import kite
+        except ImportError:
+            raise ImportError('Kite not installed')
+        if isinstance(scene, kite.scene.Scene):
+            if scene.frame.isMeter:
+                target = cls(
+                    north_shift=scene.frame.gridN.data,
+                    lat=scene.frame.llLon,
+                    lon=scene.frame.llLon,
+                    east_shift=scene.frame.gridE.data,
+                    theta=scene.theta,
+                    phi=scene.phi,
+                    nrows=scene.frame.rows,
+                    cols=scene.frame.cols)
+        else:
+            raise('No kite scene given')
+        return target
+
 
 class GNSSCampaignTarget(StaticTarget):
 

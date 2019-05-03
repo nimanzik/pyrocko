@@ -110,6 +110,13 @@ class SatelliteResult(StaticResult):
         optional=True)
 
     def kite_scene(self, component='displacement.los', scene_config=None):
+        '''
+        Return a kite scene object.
+        :param component, can be displacement.los, displacement.n,
+        displacement.u, displacement.d.
+        :param scene_config, use meta and frame from a kite scene configuration
+        :class:`~kite.scenes` instance.
+        '''
         try:
             from kite import Scene
         except ImportError:
@@ -117,7 +124,7 @@ class SatelliteResult(StaticResult):
         sc = Scene()
         if self.ncols is None or self.nrows is None or self.theta is None\
                 or self.phi is None:
-            raise('Scene parameters not given')
+            raise('Scene parameters not given or non-regular gridded input.')
         else:
             sc.theta = self.theta
             sc.phi = self.phi
