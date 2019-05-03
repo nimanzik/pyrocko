@@ -103,11 +103,14 @@ class SatelliteResult(StaticResult):
         optional=True,
         shape=(None,), dtype=num.float)
 
-    nrows = Int.T(
-        optional=True)
+    llLat = Float.T(optional=True)
+    llLon = Float.T(optional=True)
+    dE = Float.T(optional=True)
+    dN = Float.T(optional=True)
 
-    ncols = Int.T(
-        optional=True)
+    isMeter = Bool.T(optional=True)
+    nrows = Int.T(optional=True)
+    ncols = Int.T(optional=True)
 
     def kite_scene(self, component='displacement.los', scene_config=None):
         '''
@@ -121,26 +124,29 @@ class SatelliteResult(StaticResult):
             from kite import Scene
         except ImportError:
             raise ImportError('Kite not installed')
-        sc = Scene()
-        if self.ncols is None or self.nrows is None or self.theta is None\
-                or self.phi is None:
-            raise('Scene parameters not given or non-regular gridded input.')
-        else:
-            sc.theta = self.theta
-            sc.phi = self.phi
-            if scene_config is not None:
-                sc.frame = scene_config.frame
-                sc.meta = scene_config.meta
-                sc.theta = scene_config.theta
-                sc.phi = scene_config.phi
-            components = self.result
-            disp = components[component]
-            disp = num.reshape(disp,
-                               (self.nrows,
-                                self.ncols))
-            sc.displacement = disp
 
-            return sc
+        if self.ncols is None or self.nrows is None:
+            raise AttributeError('Scene shape (ncols, nrows) not given.')
+
+        if component not in self.result.keys():
+            raise ValueError('Component %s not in %s'
+                             % (component, ', '.join(self.result.keys())))
+
+        displ = self.result[component].reshape((self.nrows, self.ncols))
+        sc = Scene(
+            displacement=displ,
+            phi=self.phi,
+            theta=self.theta)
+
+        sc.frame.spacing = 'meter' if self.isMeter else 'degree'
+        sc.frame.llLat = self.llLat
+        sc.frame.llLon = self.llLon
+        sc.frame.dE = self.dE
+        sc.frame.dN = self.dN
+
+        sc.meta.title = 'pyrocko-gf-synthetic'
+
+        return sc
 
 
 class ComponentSchemeDescription(Object):
@@ -218,7 +224,7 @@ class ComponentScheme(StringChoice):
     Different Green's Function component schemes are available:
 
     ================= =========================================================
-    \                 Description
+    \\                 Description
     ================= =========================================================
     ``elastic10``     Elastodynamic for
                       :py:class:`~pyrocko.gf.meta.ConfigTypeA` and
@@ -769,10 +775,10 @@ class DiscretizedSource(Object):
         Object.__setattr__(self, name, value)
 
     def get_source_terms(self, scheme):
-        raise NotImplemented()
+        raise NotImplementedError
 
     def make_weights(self, receiver, scheme):
-        raise NotImplemented()
+        raise NotImplementedError
 
     @property
     def effective_latlons(self):
@@ -1664,7 +1670,7 @@ class Config(Object):
         return out
 
     def short_info(self):
-        raise NotImplemented('should be implemented in subclass')
+        raise NotImplementedError('should be implemented in subclass')
 
     def get_shear_moduli(self, lat, lon, points,
                          interpolation=None):

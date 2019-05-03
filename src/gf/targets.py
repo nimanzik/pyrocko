@@ -323,9 +323,12 @@ class SatelliteTarget(StaticTarget):
         return self._los_factors
 
     def post_process(self, engine, source, statics):
-        return meta.SatelliteResult(result=statics,
-                                    theta=self.theta, phi=self.phi,
-                                    nrows=self.nrows, ncols=self.ncols)
+        # TODO: Work only with `from_kite_scene`!
+        return meta.SatelliteResult(
+            result=statics,
+            theta=self.theta, phi=self.phi,
+            nrows=self.nrows, ncols=self.ncols,
+            llLat=llLat, llLon=llLon)
 
     @classmethod
     def from_kite_scene(cls, scene):
@@ -333,19 +336,33 @@ class SatelliteTarget(StaticTarget):
             import kite
         except ImportError:
             raise ImportError('Kite not installed')
-        if isinstance(scene, kite.scene.Scene):
-            if scene.frame.isMeter:
-                target = cls(
-                    north_shift=scene.frame.gridN.data,
-                    lat=scene.frame.llLon,
-                    lon=scene.frame.llLon,
-                    east_shift=scene.frame.gridE.data,
-                    theta=scene.theta,
-                    phi=scene.phi,
-                    nrows=scene.frame.rows,
-                    cols=scene.frame.cols)
+        if not isinstance(scene, kite.scene.Scene):
+            raise ValueError('Not a Kite scene')
+
+        if scene.frame.isMeter():
+            target = cls(
+                lons=num.full_like(scene.displacement, scene.frame.llLon),
+                lats=num.full_like(scene.displacement, scene.frame.llLat),
+                north_shifts=scene.frame.gridN.data.ravel(),
+                east_shifts=scene.frame.gridE.data.ravel(),
+                theta=scene.theta,
+                phi=scene.phi,
+                nrows=scene.frame.rows,
+                cols=scene.frame.cols)
+
+        elif scene.frame.isDegree():
+            target = cls(
+                lats=scene.frame.gridN.data.ravel(),
+                lons=scene.frame.gridE.data.ravel(),
+                north_shifts=num.zeros_like(scene.displacement),
+                east_shifts=num.zeros_like(scene.displacement),
+                theta=scene.theta,
+                phi=scene.phi,
+                nrows=scene.frame.rows,
+                cols=scene.frame.cols)
         else:
-            raise('No kite scene given')
+            raise AttributeError('scene.frame is neither meter nor degree')
+
         return target
 
 
