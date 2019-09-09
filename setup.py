@@ -566,6 +566,7 @@ subpacknames = [
     'pyrocko.apps',
     'pyrocko.io',
     'pyrocko.model',
+    'pyrocko.modelling',
     'pyrocko.plot',
     'pyrocko.gui',
     'pyrocko.gui.snufflings',
@@ -720,6 +721,19 @@ setup(
             include_dirs=[get_python_inc()],
             extra_compile_args=['-Wno-parentheses', '-Wno-uninitialized'],
             extra_link_args=[] if sys.platform != 'sunos5' else ['-Wl,-x']),
+        Extension(
+            'modelling.disloc_ext',
+            include_dirs=[get_python_inc(), numpy.get_include()],
+            extra_compile_args=['-Wextra'] + omp_arg,
+            extra_link_args=[] + omp_lib,
+            sources=[op.join('src', 'modelling', 'ext', 'disloc_ext.c')]),
+
+        Extension(
+            'modelling.okada_ext',
+            include_dirs=[get_python_inc(), numpy.get_include()],
+            extra_compile_args=['-Wextra'] + omp_arg,
+            extra_link_args=[] + omp_lib,
+            sources=[op.join('src', 'modelling', 'ext', 'okada_ext.c')])
     ],
 
     scripts=[
