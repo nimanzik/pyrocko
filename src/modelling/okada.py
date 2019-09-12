@@ -429,6 +429,9 @@ class DislocationInverter(object):
                 (dip + 180.) * d2r, strike * d2r, 0.).A
             return rotmat
 
+        lambda_mean = num.mean([src.lamb for src in source_patches_list])
+        shearmod_mean = num.mean([src.shearmod for src in source_patches_list])
+
         unit_disl = 1.
         disl_cases = {
             'strikeslip': {
@@ -458,8 +461,8 @@ class DislocationInverter(object):
                     source[num.newaxis, :].copy(),
                     source_disl[num.newaxis, :].copy(),
                     receiver_coords,
-                    source_patches_list[isource].lamb,
-                    source_patches_list[isource].shearmod,
+                    lambda_mean,
+                    shearmod_mean,
                     0)
 
                 eps = \
@@ -469,8 +472,8 @@ class DislocationInverter(object):
 
                 diag_ind = [0, 4, 8]
                 dilatation = num.sum(eps[:, diag_ind], axis=1)[:, num.newaxis]
-                lamb = source_patches_list[isource].lamb
-                mu = source_patches_list[isource].shearmod
+                lamb = lambda_mean
+                mu = shearmod_mean
                 kron = num.zeros_like(eps)
                 kron[:, diag_ind] = 1.
 
@@ -538,6 +541,12 @@ class DislocationInverter(object):
                 (dip + 180.) * d2r, strike * d2r, 0.).A
             return rotmat
 
+        lambda_mean = num.mean([src.lamb for src in source_patches_list])
+        shearmod_mean = num.mean([src.shearmod for src in source_patches_list])
+        print(
+            'Elastic Parameters [Pa]: lambda %.1f, mu %.1f' % (
+                lambda_mean, shearmod_mean))
+
         unit_disl = 1.
         disl_cases = {
             'strikeslip': {
@@ -567,8 +576,8 @@ class DislocationInverter(object):
                     source[num.newaxis, :],
                     source_disl[num.newaxis, :],
                     receiver_coords,
-                    source_patches_list[isource].lamb,
-                    source_patches_list[isource].shearmod,
+                    lambda_mean,
+                    shearmod_mean,
                     0)
 
                 for irec in range(receiver_coords.shape[0]):
@@ -585,14 +594,14 @@ class DislocationInverter(object):
                     for m, n in zip([0, 0, 0, 1, 1, 2], [0, 1, 2, 1, 2, 2]):
                         if m == n:
                             stress_tens[m, n] = \
-                                source_patches_list[isource].lamb * \
+                                lambda_mean * \
                                 dilatation + \
-                                2. * source_patches_list[isource].shearmod * \
+                                2. * shearmod_mean * \
                                 eps[m, n]
 
                         else:
                             stress_tens[m, n] = \
-                                2. * source_patches_list[isource].shearmod * \
+                                2. * shearmod_mean * \
                                 eps[m, n]
                             stress_tens[n, m] = stress_tens[m, n]
 
