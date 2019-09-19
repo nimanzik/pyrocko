@@ -543,9 +543,6 @@ class DislocationInverter(object):
 
         lambda_mean = num.mean([src.lamb for src in source_patches_list])
         shearmod_mean = num.mean([src.shearmod for src in source_patches_list])
-        print(
-            'Elastic Parameters [Pa]: lambda %.1f, mu %.1f' % (
-                lambda_mean, shearmod_mean))
 
         unit_disl = 1.
         disl_cases = {
