@@ -1,7 +1,7 @@
 import numpy as num
 
 from pyrocko.modelling import OkadaSource, DislocationInverter
-from pyrocko.plot import dislocation_plot
+from pyrocko.plot import dislocation as displt
 
 km = 1000.
 
@@ -49,7 +49,7 @@ disloc_est = DislocationInverter.get_disloc_lsq(
     stress_field, source_list=source_discretized)
 
 # Plot
-dislocation_plot.plot(
+displt.plot(
     disloc_est.reshape(npoints, 3),
     receiver_coords,
     titles=['$u_{strike}$', '$u_{dip}$', '$u_{opening}$', '$u_{total}$'],

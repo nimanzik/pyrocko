@@ -1,7 +1,7 @@
 import numpy as num
 
 from pyrocko.modelling import OkadaSource, okada_ext
-from pyrocko.plot import dislocation_plot
+from pyrocko.plot import dislocation as displt
 
 d2r = num.pi / 180.
 km = 1000.
@@ -46,4 +46,4 @@ result = okada_ext.okada(
     source.lamb, source.shearmod, 0)
 
 # Plot
-dislocation_plot.plot(result, receiver_coords, zero_center=True)
+displt.plot(result, receiver_coords, cmap='coolwarm', zero_center=True)

@@ -6,6 +6,7 @@ import numpy as num
 import logging
 
 from pyrocko import moment_tensor as mt
+import pyrocko.guts as guts
 from pyrocko.guts import Bool, Float, String, Timestamp
 # from pyrocko.gf import Source
 from pyrocko.model import Location
@@ -20,52 +21,52 @@ r2d = 180. / num.pi
 km = 1.0e3
 
 
-class Cloneable(object):
+# class Cloneable(object):
 
-    def __iter__(self):
-        return iter(self.T.propnames)
+#     def __iter__(self):
+#         return iter(self.T.propnames)
 
-    def __getitem__(self, k):
-        if k not in self.keys():
-            raise KeyError(k)
+#     def __getitem__(self, k):
+#         if k not in self.keys():
+#             raise KeyError(k)
 
-        return getattr(self, k)
+#         return getattr(self, k)
 
-    def __setitem__(self, k, v):
-        if k not in self.keys():
-            raise KeyError(k)
+#     def __setitem__(self, k, v):
+#         if k not in self.keys():
+#             raise KeyError(k)
 
-        return setattr(self, k, v)
+#         return setattr(self, k, v)
 
-    def clone(self, **kwargs):
-        '''
-        Make a copy of the object.
+#     def clone(self, **kwargs):
+#         '''
+#         Make a copy of the object.
 
-        A new object of the same class is created and initialized with the
-        parameters of the object on which this method is called on. If
-        ``kwargs`` are given, these are used to override any of the
-        initialization parameters.
-        '''
+#         A new object of the same class is created and initialized with the
+#         parameters of the object on which this method is called on. If
+#         ``kwargs`` are given, these are used to override any of the
+#         initialization parameters.
+#         '''
 
-        d = dict(self)
-        for k in d:
-            v = d[k]
-            if isinstance(v, Cloneable):
-                d[k] = v.clone()
+#         d = dict(self)
+#         for k in d:
+#             v = d[k]
+#             if isinstance(v, Cloneable):
+#                 d[k] = v.clone()
 
-        d.update(kwargs)
-        return self.__class__(**d)
+#         d.update(kwargs)
+#         return self.__class__(**d)
 
-    @classmethod
-    def keys(cls):
-        '''
-        Get list of the source model's parameter names.
-        '''
+#     @classmethod
+#     def keys(cls):
+#         '''
+#         Get list of the source model's parameter names.
+#         '''
 
-        return cls.T.propnames
+#         return cls.T.propnames
 
 
-class AnalyticalSource(Location, Cloneable):
+class AnalyticalSource(Location):
     name = String.T(
         optional=True,
         default='')
@@ -91,7 +92,7 @@ class AnalyticalSource(Location, Cloneable):
     def easting(self):
         return self.east_shift
 
-    # update = Source.update
+    clone = guts.clone
 
 
 class AnalyticalRectangularSource(AnalyticalSource):
@@ -238,7 +239,7 @@ class OkadaSource(AnalyticalRectangularSource):
         overwritten
 
         :return: array of the source data as input for disloc_ext
-        :rtype: py:class:`numpy.ndarray`, ``(1, 10)``
+        :rtype: :py:class:`numpy.ndarray`, ``(1, 10)``
         '''
 
         if dsrc is None or dsrc.shape != tuple(9, ):
@@ -269,7 +270,7 @@ class OkadaSource(AnalyticalRectangularSource):
         Build source information array for okada_ext.okada input
 
         :return: array of the source data as input for okada_ext.okada
-        :rtype: py:class:`numpy.ndarray`, ``(1, 9)``
+        :rtype: :py:class:`numpy.ndarray`, ``(1, 9)``
         '''
 
         source_patch = num.empty(9)
@@ -292,7 +293,7 @@ class OkadaSource(AnalyticalRectangularSource):
 
         :return: array of the source dislocation data as input for
         okada_ext.okada
-        :rtype: py:class:`numpy.ndarray`, ``(1, 3)``
+        :rtype: :py:class:`numpy.ndarray`, ``(1, 3)``
         '''
 
         source_disl = num.empty(3)
@@ -400,7 +401,7 @@ class DislocationInverter(object):
         :param source_patches_list: list of all OkadaSources, which shall be
             used for BEM
         :type source_patches_list: list of
-            py:class:`pyrocko.modelling.OkadaSource`
+            :py:class:`pyrocko.modelling.OkadaSource`
         :param pure_shear: Flag, if also opening mode shall be taken into
             account (False) or the fault is described as pure shear (True).
         :type pure_shear: optional, Bool
@@ -512,7 +513,7 @@ class DislocationInverter(object):
         :param source_patches_list: list of all OkadaSources, which shall be
             used for BEM
         :type source_patches_list: list of
-            py:class:`pyrocko.modelling.OkadaSource`
+            :py:class:`pyrocko.modelling.OkadaSource`
         :param pure_shear: Flag, if also opening mode shall be taken into
             account (False) or the fault is described as pure shear (True).
         :type pure_shear: optional, Bool
@@ -645,7 +646,7 @@ class DislocationInverter(object):
         :param source_list: list of all OkadaSources, which shall be
             used for BEM
         :type source_list: optional, list of
-            py:class:`pyrocko.modelling.OkadaSource`
+            :py:class:`pyrocko.modelling.OkadaSource`
 
         :return: inverted displacements (u_strike, u_dip , u_tensile) for each
             source patch. order: [
