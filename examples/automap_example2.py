@@ -1,3 +1,5 @@
+import os
+
 import numpy as num
 from scipy.interpolate import RegularGridInterpolator as scrgi
 
@@ -157,4 +159,8 @@ m.gmt.psscale(
     *m.jxyr)
 
 # Save plot
-m.save('test_map.png', resolution=150)
+m.save('automap_chile.png', resolution=150)
+
+# Clear temporary files
+os.remove('temp.grd')
+os.remove('my_cpt.cpt')
