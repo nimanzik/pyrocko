@@ -30,7 +30,7 @@ source_discretized, _ = source.discretize(nlength, nwidth)
 receiver_coords = num.array([
     src.source_patch()[:3] for src in source_discretized])
 
-# Create Stress drop array
+# Create Stress drop (traction) array
 dstress = -1.5e6
 stress_comp = 1
 
@@ -54,3 +54,4 @@ displt.plot(
     receiver_coords,
     titles=['$u_{strike}$', '$u_{dip}$', '$u_{opening}$', '$u_{total}$'],
     cmap='viridis_r')
+
