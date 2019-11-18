@@ -21,51 +21,6 @@ r2d = 180. / num.pi
 km = 1.0e3
 
 
-# class Cloneable(object):
-
-#     def __iter__(self):
-#         return iter(self.T.propnames)
-
-#     def __getitem__(self, k):
-#         if k not in self.keys():
-#             raise KeyError(k)
-
-#         return getattr(self, k)
-
-#     def __setitem__(self, k, v):
-#         if k not in self.keys():
-#             raise KeyError(k)
-
-#         return setattr(self, k, v)
-
-#     def clone(self, **kwargs):
-#         '''
-#         Make a copy of the object.
-
-#         A new object of the same class is created and initialized with the
-#         parameters of the object on which this method is called on. If
-#         ``kwargs`` are given, these are used to override any of the
-#         initialization parameters.
-#         '''
-
-#         d = dict(self)
-#         for k in d:
-#             v = d[k]
-#             if isinstance(v, Cloneable):
-#                 d[k] = v.clone()
-
-#         d.update(kwargs)
-#         return self.__class__(**d)
-
-#     @classmethod
-#     def keys(cls):
-#         '''
-#         Get list of the source model's parameter names.
-#         '''
-
-#         return cls.T.propnames
-
-
 class AnalyticalSource(Location):
     name = String.T(
         optional=True,
