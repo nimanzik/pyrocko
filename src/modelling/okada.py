@@ -98,6 +98,10 @@ class AnalyticalRectangularSource(AnalyticalSource):
     def width(self):
         return num.sum(num.abs([self.aw1, self.aw2]))
 
+    @property
+    def area(self):
+        return self.width * self.length
+
 
 class OkadaSource(AnalyticalRectangularSource):
     '''
@@ -168,8 +172,7 @@ class OkadaSource(AnalyticalRectangularSource):
         if self.opening:
             disl = num.sqrt(num.sum([disl**2, self.opening**2]))
 
-        A = self.length * self.width
-        return mu * A * disl
+        return mu * self.area * disl
 
     @property
     def moment_magnitude(self):
