@@ -2239,7 +2239,7 @@ class RectangularSource(SourceWithDerivedMagnitude):
 
 class PseudoDynamicRupture(RectangularSource):
     '''
-    Merged Eikonal and Okada Source for quasi dynamic rupture modelling
+    Merged Eikonal and Okada Source for quasi-dynamic rupture modeling
     '''
 
     gamma = Float.T(
@@ -2248,14 +2248,29 @@ class PseudoDynamicRupture(RectangularSource):
              'v_r = gamma * v_s')
 
     nx = Float.T(
-        default=10,
         help='Number of discrete source patches in x direction (along strike)',
         optional=True)
 
     ny = Float.T(
-        default=5,
         help='Number of discrete source patches in y direction (down dip)',
         optional=True)
+
+    patches = List.T(
+        OkadaSource.T(),
+        optional=True,
+        help='List of all boundary elements/sub faults/fault patches')
+
+    tractions = Array.T(
+        optional=True,
+        help='Array of traction vectors per subfault (size = nx*ny*3)',
+        dtype=num.float,
+        shape=(None,))
+
+    coef_mat = Array.T(
+        optional=True,
+        help='Coefficient matrix linking traction and dislocation field',
+        dtype=num.float,
+        shape=(None,))
 
     def _discretize_points(self, store, factor=1., *args, **kwargs):
         '''
@@ -2434,11 +2449,12 @@ class PseudoDynamicRupture(RectangularSource):
 
         return points, points_xy, vr, times
 
-    def discretize_okada(
+    def discretize_patches(
             self,
             store,
             interpolation='multilinear',
-            factor=1.,
+            factor=None,
+            grid_shape=(),
             *args,
             **kwargs):
 
@@ -2464,6 +2480,13 @@ class PseudoDynamicRupture(RectangularSource):
                 ``(n_points)``,
             :py:class:`numpy.ndarray`, ``(n_points_dip, n_points_strike)``
         '''
+
+        if factor and grid_shape:
+            raise ValueError(
+                'Please give either a factor or the fault patch grid shape.')
+
+        if not factor:
+            factor = 1.
 
         _, points_xy, vr, times = self.discretize_time(
             store=store, factor=factor, *args, **kwargs)
@@ -2522,13 +2545,13 @@ class PseudoDynamicRupture(RectangularSource):
             shearmod=shear_mod,
             opening=kwargs.get('opening', 0.))
 
-        nx_interp = kwargs.get('nlength', int(num.floor(nx / factor)))
-        ny_interp = kwargs.get('nwidth', int(num.floor(ny / factor)))
+        if not grid_shape:
+            grid_shape = (
+                int(num.floor(nx / factor)), int(num.floor(ny / factor)))
 
-        self.nx = nx_interp
-        self.ny = ny_interp
+        self.nx, self.ny = grid_shape
 
-        source_disc, source_points = src.discretize(nx_interp, ny_interp)
+        source_disc, source_points = src.discretize(self.nx, self.ny)
         cfg_args = [
             self.lat,
             self.lon,
@@ -2539,30 +2562,44 @@ class PseudoDynamicRupture(RectangularSource):
             source_disc[isrc].shearmod = shear_mod[isrc]
             source_disc[isrc].poisson = poisson[isrc]
 
-        times_interp = time_interpolator(
-            num.hstack((
-                source_points[:, 0].reshape(-1, 1),
-                source_points[:, 1].reshape(-1, 1))))
+        if grid_shape != (nx, ny):
+            times_interp = time_interpolator(
+                num.hstack((
+                    source_points[:, 0].reshape(-1, 1),
+                    source_points[:, 1].reshape(-1, 1))))
 
-        vr_interp = vr_interpolator(
-            num.hstack((
-                source_points[:, 0].reshape(-1, 1),
-                source_points[:, 1].reshape(-1, 1))))
+            vr_interp = vr_interpolator(
+                num.hstack((
+                    source_points[:, 0].reshape(-1, 1),
+                    source_points[:, 1].reshape(-1, 1))))
+        else:
+            times_interp = times.T.flatten()
+            vr_interp = vr.T.flatten()
 
         for isrc in range(len(source_disc)):
             source_disc[isrc].vr = vr_interp[isrc]
             source_disc[isrc].time = times_interp[isrc]
 
-        return src, source_disc, times_interp.reshape(
-                    ny_interp, nx_interp)
+        self.patches = source_disc
+
+    def calc_coef_mat(self):
+        if self.patches:
+            self.coef_mat = DislocationInverter.get_coef_mat(self.patches)
+        else:
+            raise ValueError(
+                'Source patches are needed. Please calculate them first.')
+
+    def get_patch_attributes(self, attribute):
+        if self.patches:
+            return num.array(
+                [getattr(patch, attribute) for patch in self.patches])
+        else:
+            raise ValueError(
+                'Source patches are needed. Please calculate them first.')
 
     def get_okada_slip(
             self,
-            stress_field,
-            times,
             t,
-            source_list=None,
-            coef_mat=None,
             **kwargs):
 
         '''
@@ -2590,9 +2627,10 @@ class PseudoDynamicRupture(RectangularSource):
         :rtype: :py:class:`numpy.ndarray`, ``(n_sources * 3, 1)``
         '''
 
+        times = self.get_patch_attributes('time')
         boolean = (times <= t).flatten()
         indices_source = num.array(range(boolean.shape[0]))[boolean]
-        disloc_est = num.zeros_like(stress_field).reshape(-1,)
+        disloc_est = num.zeros_like(self.tractions).reshape(-1,)
 
         if indices_source.shape[0] == 0:
             return disloc_est
@@ -2601,41 +2639,41 @@ class PseudoDynamicRupture(RectangularSource):
             [num.arange(i * 3, i * 3 + 3, 1) for i in indices_source]
             ).flatten()
 
-        if coef_mat is not None:
-            if stress_field.shape == tuple((coef_mat.shape[0], )):
-                stress_field.reshape(-1, 1)
-            elif stress_field.shape != tuple((coef_mat.shape[0], 1)):
+        if self.coef_mat is not None:
+            if self.tractions.shape == tuple((self.coef_mat.shape[0], )):
+                self.tractions.reshape(-1, 1)
+            elif self.tractions.shape != tuple((self.coef_mat.shape[0], 1)):
                 raise TypeError(
                     'coefficient matrix does not have expected shape. '
                     'Following shape is '
-                    'needed: %i, %i' % stress_field.shape)
+                    'needed: %i, %i' % self.tractions.shape)
 
             disloc_est[indices_disl] = DislocationInverter.get_disloc_lsq(
-                stress_field=stress_field[indices_disl],
-                coef_mat=coef_mat[indices_disl, :][:, indices_disl],
+                stress_field=self.tractions[indices_disl],
+                coef_mat=self.coef_mat[indices_disl, :][:, indices_disl],
                 **kwargs).reshape(-1,)
 
-        elif source_list is not None:
-            if stress_field.shape == tuple((len(source_list) * 3, )):
-                stress_field.reshape(-1, 1)
-            elif stress_field.shape != tuple((len(source_list) * 3, 1)):
+        elif self.patches is not None:
+            if self.tractions.shape == tuple((len(self.patches) * 3, )):
+                self.tractions.reshape(-1, 1)
+            elif self.tractions.shape != tuple((len(self.patches) * 3, 1)):
                 raise TypeError(
                     'stress does not have expected shape. Following shape is '
-                    'needed: %i, %i' % stress_field.shape)
+                    'needed: %i, %i' % self.tractions.shape)
 
             disloc_est[indices_disl] = DislocationInverter.get_disloc_lsq(
-                stress_field=stress_field[indices_disl],
-                source_list=[source_list[i] for i in indices_source],
+                stress_field=self.tractions[indices_disl],
+                source_list=[self.patches[i] for i in indices_source],
                 **kwargs).reshape(-1,)
 
 
-        elif coef_mat is None and source_list is None:
+        elif self.coef_mat is None and self.patches is None:
             raise TypeError(
                 'Coefficient matrix or source list needs to be defined.')
 
         return disloc_est
 
-    def get_delta_slip(self, store, times, dt=None, *args, **kwargs):
+    def get_delta_slip(self, store, dt=None, *args, **kwargs):
         '''
         Get slip change inverted from OkadaSources depending on store deltat
 
@@ -2664,6 +2702,7 @@ class PseudoDynamicRupture(RectangularSource):
         if not dt:
             dt = store.config.deltat
 
+        times = self.get_patch_attributes('time')
         t_max = num.max(times)
         calc_times = num.arange(0., t_max + dt, dt)
 
@@ -2672,14 +2711,13 @@ class PseudoDynamicRupture(RectangularSource):
 
         for itime, t in enumerate(calc_times[1:]):
             delta_disloc_est[:, itime + 1] = self.get_okada_slip(
-                times=times,
                 t=t,
                 *args, **kwargs).flatten() - num.sum(
                     delta_disloc_est[:, :itime+1], axis=1)
 
         return delta_disloc_est, calc_times
 
-    def get_moment_rate(self, source_list, *args, **kwargs):
+    def get_moment_rate(self, *args, **kwargs):
         '''
         Get seismic moment rate for each boundary element individually
 
@@ -2711,12 +2749,12 @@ class PseudoDynamicRupture(RectangularSource):
 
         shear_mod = num.tile(
             num.array(
-                [source.shearmod for source in source_list]).reshape(-1, 1),
+                [patch.shearmod for patch in self.patches]).reshape(-1, 1),
             (1, calc_times.shape[0]))
 
         dA = num.tile(
             num.array(
-                [source.length * source.width for source in source_list]
+                [patch.length * patch.width for patch in self.patches]
                 ).reshape(-1, 1),
             (1, calc_times.shape[0]))
 
