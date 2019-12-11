@@ -315,7 +315,7 @@ def points_on_rect_source(
     points[:, 1] -= anch_y * 0.5 * wd
 
     rotmat = num.asarray(
-        mt.euler_to_matrix(dip * d2r, strike * d2r, 0.0))
+        pmt.euler_to_matrix(dip * d2r, strike * d2r, 0.0))
 
     return num.dot(rotmat.T, points.T).T
 

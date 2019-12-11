@@ -18,3 +18,4 @@ from .hud import *  # noqa
 from .volcanoes import *  # noqa
 from .kite_insar import *  # noqa
 from .active_faults import *
+from .geometry import *  # noqa
