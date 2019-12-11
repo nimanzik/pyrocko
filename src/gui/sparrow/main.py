@@ -160,6 +160,7 @@ class Viewer(qw.QMainWindow):
                 ('HUD subtitle', elements.HudState(
                     template='Awesome')),
                 ('Volcanoes', elements.VolcanoesState()),
+                ('Faults', elements.ActiveFaultsState()),
                 ('InSAR Surface Displacements', elements.KiteState())]:
 
             def wrap_add_element(estate):

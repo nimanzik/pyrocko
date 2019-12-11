@@ -21,34 +21,34 @@ class Fault(object):
     __fields__ = OrderedDict()
     __slots__ = list(__fields__.keys())
 
+    def get_property(self, fault_obj, attr):
+        try:
+            values = float(fault_obj['properties'][attr][1:3])
+        except:
+            if attr == 'lower_seis_depth' or attr == 'upper_seis_depth':
+                values = 0
+            else:
+                values = -999
+        return values
+
     def __init__(self, *args):
         for f in args:
             nodes = len(f['geometry']['coordinates'])
             for (attr, attr_type) in self.__fields__.items():
                 values = []
-                if attr == 'average_dip':
-                    try:
-                        values = float(f['properties']['average_dip'][1:3])
-                    except:
-                        values = -999
-                if attr == 'average_dip':
-                    try:
-                        values = float(f['properties']['average_dip'][1:3])
-                    except:
-                        values = -999
-                elif attr == 'average_rake':
-                    try:
-                        values = float(f['properties']['average_rake'][1:3])
-                    except:
-                        values = -999
-                elif attr == 'lat':
+                if attr == 'lat':
                     for i in range(0, nodes):
                         values.append(f['geometry']['coordinates'][i][1])
                 elif attr == 'lon':
                     for i in range(0, nodes):
                         values.append(f['geometry']['coordinates'][i][0])
+                elif attr == 'slip_type':
+                    try:
+                        values = f['properties']['slip_type']
+                    except:
+                        values = 'Unknown'
                 else:
-                        values = 0.
+                    values = self.get_property(f, attr)
                 try:
                     setattr(self, attr, attr_type(values))
                 except ValueError as e:
@@ -69,6 +69,7 @@ class ActiveFault(Fault):
         ('average_rake', float),
         ('lower_seis_depth', float),
         ('upper_seis_depth', float),
+        ('slip_type', str),
     ])
 
 

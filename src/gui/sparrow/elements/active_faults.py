@@ -19,7 +19,10 @@ from .base import Element, ElementState
 guts_prefix = 'sparrow'
 
 km = 1e3
-COLOR_FAULTS = (0.5, 0.3, .22)
+COLOR_FAULTS_NORMAL = (0.5, 0.3, .22)
+COLOR_FAULTS_REVERSE = (0.9, 0.3, .92)
+COLOR_FAULTS = (0.1, 0.0, .0)
+COLOR_FAULTS_SS = (0.3, 0.0, .62)
 
 
 def faults_to_points(faults):
@@ -50,8 +53,18 @@ def faults_to_color(faults):
     num_all_nodes = faults.nactive_faults_nodes()
     for f in faults.active_faults:
         num_nodes = len(f.lat)
-        for i in range(0, num_nodes):
-            colors.append(COLOR_FAULTS)
+        if f.slip_type == "Reverse":
+            for i in range(0, num_nodes):
+                colors.append(COLOR_FAULTS_REVERSE)
+        elif f.slip_type == "Normal":
+            for i in range(0, num_nodes):
+                colors.append(COLOR_FAULTS_NORMAL)
+        elif f.slip_type == "Unkown":
+            for i in range(0, num_nodes):
+                colors.append(COLOR_FAULTS)
+        else:
+            for i in range(0, num_nodes):
+                colors.append(COLOR_FAULTS_SS)
     return num.array(colors)
 
 
