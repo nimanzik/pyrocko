@@ -2260,24 +2260,6 @@ class PseudoDynamicRupture(RectangularSource):
         optional=True,
         help='List of all boundary elements/sub faults/fault patches')
 
-    # nucleation_x = Array.T(
-    #     default=num.array([0.]),
-    #     help='horizontal position of rupture nucleations in normalized fault '
-    #          'plane coordinates (-1 = left edge, +1 = right edge)',
-    #     dtype=num.float)
-
-    # nucleation_y = Array.T(
-    #     default=num.array([0.]),
-    #     help='down-dip position of rupture nucleations in normalized fault '
-    #          'plane coordinates (-1 = upper edge, +1 = lower edge)',
-    #     dtype=num.float)
-
-    # nucleation_times = Array.T(
-    #     optional=True,
-    #     help='Times of rupture nucleations at nucleation_x, nucleation_y',
-    #     dtype=num.float,
-    #     shape=(None,))
-
     tractions = Array.T(
         optional=True,
         help=
@@ -2297,6 +2279,8 @@ class PseudoDynamicRupture(RectangularSource):
     def _discretize_points(self, store, factor=1., *args, **kwargs):
         '''
         Discretize source plane with equal vertical and horizontal spacing
+
+        Arguments and keyword arguments needed for self.points_on_source.
 
         :param store: Greens function database (needs to cover whole region of
             of the source)
@@ -2479,6 +2463,8 @@ class PseudoDynamicRupture(RectangularSource):
         '''
         Get rupture start time and OkadaSource elements for discrete centre
         points on source plane and stores them in the patches-attribute
+
+        Arguments and keyword arguments needed for self.discretize_time.
 
         :param store: Greens function database (needs to cover whole region of
             of the source)
