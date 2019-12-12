@@ -7,9 +7,6 @@ from __future__ import absolute_import, print_function, division
 
 import logging
 
-from pyrocko.table import Table, LocationRecipe
-from pyrocko.model import Event
-from pyrocko.guts_array import Array
 from pyrocko.guts import Object, Bool, List, String, load
 from pyrocko.geometry import arr_vertices, arr_faces
 from pyrocko.gui.qt_compat import qw, qc, fnpatch
@@ -26,49 +23,11 @@ guts_prefix = 'sparrow'
 km = 1e3
 
 
-class Geometry(Object):
-
-    properties = Table.T(default=Table.D(), optional=True)
-    vertices = None
-    faces = None
-    event = Event.T(default=Event.D())
-    times = Array.T(
-        shape=(None,),
-        dtype='float64',
-        help='1d vector of times [s] wrt. event time for which '
-             'properties have value',
-        optional=True)
-    stfs = Array.T(
-        shape=(None, None),
-        dtype='float64',
-        help='2d array of source time functions for each patch, number of '
-             'columns need tp be equal to number of times',
-        optional=True)
-
-    def setup(self, vert_c5, faces):
-
-        self.vertices = Table()
-        self.vertices.add_recipe(LocationRecipe())
-        self.vertices.add_col((
-            'c5', '',
-            ('ref_lat', 'ref_lon', 'north_shift', 'east_shift', 'depth')),
-            vert_c5)
-
-        self.faces = Table()
-        self.faces.add_col('faces', faces)
-
-    def add_property(self, name, values):
-        self.properties.add_col(name, values)
-
-    def get_property(self, name):
-        return self.properties.get_col(name)
-
-
 class GeometryState(ElementState):
 
     visible = Bool.T(default=False)
     geometries = List.T(Geometry.T(), default=[])
-    display_parameter = String.T(default='Slip [m]')
+    display_parameter = String.T(default='slip')
 
     def create(self):
         element = GeometryElement()
@@ -149,7 +108,10 @@ class GeometryElement(Element):
             return
 
     def load_file(self, path):
-
+        from pyrocko.table import Geometry
+        
+        g=Geometry()
+        print(g, g.__class__)
         loaded_geometry = load(filename=path)
 
         self._parent.remove_panel(self._controls)
@@ -229,6 +191,5 @@ class GeometryElement(Element):
 
 __all__ = [
     'GeometryElement',
-    'GeometryState',
-    'Geometry'
+    'GeometryState'
 ]
