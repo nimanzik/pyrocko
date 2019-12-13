@@ -323,8 +323,8 @@ class OkadaTestCase(unittest.TestCase):
         gf2 = DislocationInverter.get_coef_mat_slow(
             source_list, pure_shear=pure_shear)
 
-        assert num.linalg.det(num.dot(gf.T, gf)) != 0.
-        assert num.linalg.det(num.dot(gf2.T, gf2)) != 0.
+        assert num.linalg.slogdet(num.dot(gf.T, gf)) != (0., num.inf)
+        assert num.linalg.slogdet(num.dot(gf2.T, gf2)) != (0., num.inf)
         assert (gf == gf2).all()
 
         # Function to test the computed GF
@@ -487,7 +487,7 @@ class OkadaTestCase(unittest.TestCase):
         length_total = 10000.
         width_total = length_total
 
-        nlength = 51
+        nlength = 31
         nwidth = nlength
         length = length_total / nlength
         width = width_total / nwidth
