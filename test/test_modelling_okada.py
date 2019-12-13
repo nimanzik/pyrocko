@@ -89,7 +89,7 @@ class OkadaTestCase(unittest.TestCase):
 
         assert source_list2[0].seismic_moment == seismic_moment
 
-    def test_okada_vs_disloc_single_Source(self):
+    def test_okada_vs_disloc_single_source(self):
         north = 0.
         east = 0.
         depth = 10. * km
@@ -278,7 +278,7 @@ class OkadaTestCase(unittest.TestCase):
             plt.axis('equal')
             plt.show()
 
-    def test_okada_GF_fill(self):
+    def test_okada_gf_fill(self):
         ref_north = 0.
         ref_east = 0.
         ref_depth = 100000.
@@ -323,8 +323,8 @@ class OkadaTestCase(unittest.TestCase):
         gf2 = DislocationInverter.get_coef_mat_slow(
             source_list, pure_shear=pure_shear)
 
-        assert num.linalg.det(num.dot(gf.T, gf)) != 0.
-        assert num.linalg.det(num.dot(gf2.T, gf2)) != 0.
+        assert num.linalg.slogdet(num.dot(gf.T, gf)) != (0., num.inf)
+        assert num.linalg.slogdet(num.dot(gf2.T, gf2)) != (0., num.inf)
         assert (gf == gf2).all()
 
         # Function to test the computed GF
@@ -487,7 +487,7 @@ class OkadaTestCase(unittest.TestCase):
         length_total = 10000.
         width_total = length_total
 
-        nlength = 51
+        nlength = 31
         nwidth = nlength
         length = length_total / nlength
         width = width_total / nwidth

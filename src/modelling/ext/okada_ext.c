@@ -881,11 +881,11 @@ static okada_error_t dc3d_flexi(
 
 int good_array(
         PyObject* o,
-        int typenum,
-        int ndim_want,
+        npy_intp typenum,
+        npy_intp ndim_want,
         npy_intp* shape_want) {
 
-    int i;
+    signed long i;
 
     if (!PyArray_Check(o)) {
         PyErr_SetString(PyExc_AttributeError, "not a NumPy array" );
@@ -922,14 +922,14 @@ int good_array(
 int halfspace_check(
     double *source_patches,
     double *receiver_coords,
-    double nsources,
-    double nreceivers) {
+    unsigned long nsources,
+    unsigned long nreceivers) {
 
     /*
      * Check for Okada source below z=0
     */
 
-    int irec, isrc, src_idx;
+    unsigned long irec, isrc, src_idx;
     char msg[1024];
 
 
@@ -962,11 +962,12 @@ static PyObject* w_dc3d_flexi(
     PyObject *m,
     PyObject *args) {
 
-    int nrec, nsources, irec, isource, i, nthreads;
+    int nthreads;
+    unsigned long nrec, nsources, irec, isource, i;
     PyObject *source_patches_arr, *source_disl_arr, *receiver_coords_arr, *output_arr;
     npy_float64  *source_patches, *source_disl, *receiver_coords;
     npy_float64 *output;
-    npy_float64 lambda, mu;
+    double lambda, mu;
     double uout[12], alpha;
     npy_intp shape_want[2];
     npy_intp output_dims[2];

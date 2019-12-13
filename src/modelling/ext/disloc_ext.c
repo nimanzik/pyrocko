@@ -253,8 +253,8 @@ void Disloc(double *pOutput, double *pModel, double *pCoords, double nu, int Num
 }
 
 
-int good_array(PyObject* o, int typenum, int ndim_want, npy_intp* shape_want) {
-    int i;
+int good_array(PyObject* o, npy_intp typenum, npy_intp ndim_want, npy_intp* shape_want) {
+    unsigned long i;
 
     if (!PyArray_Check(o)) {
         PyErr_SetString(PyExc_AttributeError, "not a NumPy array" );
@@ -289,7 +289,7 @@ int good_array(PyObject* o, int typenum, int ndim_want, npy_intp* shape_want) {
 
 
 static PyObject* w_disloc(PyObject *m, PyObject *args) {
-  int nstations, ndislocations;
+  unsigned long nstations, ndislocations;
   PyObject *output_arr, *coords_arr, *models_arr;
   npy_intp output_dims[2];
   int nthreads;
