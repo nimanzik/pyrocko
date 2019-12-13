@@ -885,7 +885,11 @@ int good_array(
         npy_intp ndim_want,
         npy_intp* shape_want) {
 
+<<<<<<< HEAD
     signed long i;
+=======
+    npy_intp i;
+>>>>>>> 1b6d78751866fe88e0b3455c4d3d33a52f16a73f
 
     if (!PyArray_Check(o)) {
         PyErr_SetString(PyExc_AttributeError, "not a NumPy array" );
@@ -922,14 +926,23 @@ int good_array(
 int halfspace_check(
     double *source_patches,
     double *receiver_coords,
+<<<<<<< HEAD
     unsigned long nsources,
     unsigned long nreceivers) {
+=======
+    npy_intp nsources,
+    npy_intp nreceivers) {
+>>>>>>> 1b6d78751866fe88e0b3455c4d3d33a52f16a73f
 
     /*
      * Check for Okada source below z=0
     */
 
+<<<<<<< HEAD
     unsigned long irec, isrc, src_idx;
+=======
+    npy_intp irec, isrc, src_idx;
+>>>>>>> 1b6d78751866fe88e0b3455c4d3d33a52f16a73f
     char msg[1024];
 
 
@@ -962,8 +975,12 @@ static PyObject* w_dc3d_flexi(
     PyObject *m,
     PyObject *args) {
 
+<<<<<<< HEAD
     int nthreads;
     unsigned long nrec, nsources, irec, isource, i;
+=======
+    npy_intp nrec, nsources, irec, isource, i, nthreads;
+>>>>>>> 1b6d78751866fe88e0b3455c4d3d33a52f16a73f
     PyObject *source_patches_arr, *source_disl_arr, *receiver_coords_arr, *output_arr;
     npy_float64  *source_patches, *source_disl, *receiver_coords;
     npy_float64 *output;
