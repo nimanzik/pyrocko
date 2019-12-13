@@ -89,7 +89,7 @@ class OkadaTestCase(unittest.TestCase):
 
         assert source_list2[0].seismic_moment == seismic_moment
 
-    def test_okada_vs_disloc_single_Source(self):
+    def test_okada_vs_disloc_single_source(self):
         north = 0.
         east = 0.
         depth = 10. * km
@@ -278,7 +278,7 @@ class OkadaTestCase(unittest.TestCase):
             plt.axis('equal')
             plt.show()
 
-    def test_okada_GF_fill(self):
+    def test_okada_gf_fill(self):
         ref_north = 0.
         ref_east = 0.
         ref_depth = 100000.

@@ -922,16 +922,15 @@ int good_array(
 int halfspace_check(
     double *source_patches,
     double *receiver_coords,
-    npy_intp nsources,
-    npy_intp nreceivers) {
+    unsigned long nsources,
+    unsigned long nreceivers) {
 
     /*
      * Check for Okada source below z=0
     */
 
-    npy_intp irec, isrc, src_idx;
+    unsigned long irec, isrc, src_idx;
     char msg[1024];
-
 
     for (isrc=0; isrc<nsources; isrc++) {
         src_idx = isrc * 9;
@@ -962,11 +961,13 @@ static PyObject* w_dc3d_flexi(
     PyObject *m,
     PyObject *args) {
 
-    npy_intp nrec, nsources, irec, isource, i, nthreads;
+    int nthreads;
+    unsigned long nrec, nsources, irec, isource, i;
+
     PyObject *source_patches_arr, *source_disl_arr, *receiver_coords_arr, *output_arr;
     npy_float64  *source_patches, *source_disl, *receiver_coords;
     npy_float64 *output;
-    npy_float64 lambda, mu;
+    double lambda, mu;
     double uout[12], alpha;
     npy_intp shape_want[2];
     npy_intp output_dims[2];

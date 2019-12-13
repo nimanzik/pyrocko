@@ -289,7 +289,8 @@ int good_array(PyObject* o, npy_intp typenum, npy_intp ndim_want, npy_intp* shap
 
 
 static PyObject* w_disloc(PyObject *m, PyObject *args) {
-  npy_intp nstations, ndislocations;
+  unsigned long nstations, ndislocations;
+
   PyObject *output_arr, *coords_arr, *models_arr;
   npy_intp output_dims[2];
   npy_intp nthreads;
