@@ -59,14 +59,17 @@ class GeometryElement(Element):
         if self._parent and self._state:
             self._parent.state.elements.remove(self._state)
 
+    def init_pipeslots(self):
+        if not self._pipe:
+            for _ in self._state.geometries:
+                self._pipe.append([])
+
     def remove_pipes(self):
         for pipe in self._pipe:
-            if isinstance(pipe.actor, list):
-                for act in pipe.actor:
-                    self._parent.remove_actor(act)
-            else:
+            if not isinstance(pipe, list):
                 self._parent.remove_actor(pipe.actor)
-        self._pipe = []
+
+        self.init_pipeslots()
 
     def set_parent(self, parent):
         self._parent = parent
@@ -96,6 +99,7 @@ class GeometryElement(Element):
         state.add_listener(upd, 'cpt')
         state.add_listener(upd, 'time')
         self._state = state
+        self.init_pipeslots()
 
     def unbind_state(self):
         for listener in self._listeners:
@@ -107,10 +111,23 @@ class GeometryElement(Element):
         self._listeners = []
         self._state = None
 
-    def update_cpt(self, cpt_name):
-        if cpt_name not in self._lookuptables:
+    def get_cpt_name(self, cpt, display_parameter):
+        return '{}_{}'.format(cpt, display_parameter)
 
-            cpt = automap.read_cpt(topo.cpt(cpt_name))
+    def update_cpt(self, state):
+
+        cpt_name = self.get_cpt_name(state.cpt, state.display_parameter)
+        if cpt_name not in self._lookuptables:
+            vmins = []
+            vmaxs = []
+            for geom in state.geometries:
+                values = geom.get_property(state.display_parameter)
+                vmins.append(values.min())
+                vmaxs.append(values.max())
+
+            cpt = automap.read_cpt(topo.cpt(state.cpt))
+            cpt.scale(min(vmins), min(vmaxs))
+
             vtk_cpt = cpt_to_vtk_lookuptable(cpt)
             vtk_cpt.SetNanColor(0.0, 0.0, 0.0, 0.0)
 
@@ -136,7 +153,7 @@ class GeometryElement(Element):
         self._parent.remove_panel(self._controls)
         self._controls = None
         self._state.geometries.append(loaded_geometry)
-        self._pipe.append([])
+
         self._parent.add_panel(
             self.get_name(), self._get_controls(), visible=True)
 
@@ -144,20 +161,22 @@ class GeometryElement(Element):
 
     def get_values(self, geom, state):
         values = geom.get_property(state.display_parameter)
-
         if len(values.shape) == 2:
             idx = geom.time2idx(state.time)
-            print(idx)
             values = values[:, idx]
-            print(values)
         return values
 
     def update(self, *args):
 
         state = self._state
-        self.update_cpt(self._state.cpt)
+        self.init_pipeslots()
+
+        if state.geometries:
+            self.update_cpt(state)
 
         if state.visible:
+            cpt_name = self.get_cpt_name(
+                state.cpt, state.display_parameter)
             for i, geo in enumerate(state.geometries):
                 values = self.get_values(geo, state)
                 if not isinstance(self._pipe[i], TrimeshPipe):
@@ -166,10 +185,11 @@ class GeometryElement(Element):
                     self._pipe[i] = TrimeshPipe(
                             vertices, faces,
                             values=values,
-                            lut=self._lookuptables[self._state.cpt])
+                            lut=self._lookuptables[cpt_name])
                     self._parent.add_actor(self._pipe[i].actor)
                 else:
                     self._pipe[i].set_values(values)
+                    self._pipe[i].set_lookuptable(self._lookuptables[cpt_name])
         else:
             if self._pipe:
                 self.remove_pipes()
@@ -226,6 +246,10 @@ class GeometryElement(Element):
 
                     state_bind_slider(
                         self, state, 'time', slider, dtype=int)
+
+                pb = qw.QPushButton('Remove')
+                layout.addWidget(pb, 4, 1)
+                pb.clicked.connect(self.remove)
 
             # color maps
             cb = common.string_choices_to_combobox(CPTChoices)
