@@ -358,7 +358,7 @@ class Patch(Object):
         self.faces = faces
 
 
-class Geometry(Object):
+class OldGeometry(Object):
     centroid = Any.T(default=Table())
     outline = None
     patches = None
@@ -1340,7 +1340,7 @@ class Source(Location, Cloneable):
             **kwargs)
 
     def geometry(self, **kwargs):
-        geom = Geometry()
+        geom = OldGeometry()
         geom.set_centroid(self.pyrocko_event(**kwargs))
         geom.set_outline(self.lat, self.lon, self.outline(cs='xyz'))
 
@@ -2223,7 +2223,7 @@ class RectangularSource(SourceWithDerivedMagnitude):
         return ds
 
     def geometry(self, *args, **kwargs):
-        geom = Geometry()
+        geom = OldGeometry()
         geom.set_centroid(self.pyrocko_event(**kwargs))
         geom.set_outline(self.lat, self.lon, self.outline(cs='xyz'), **kwargs)
 

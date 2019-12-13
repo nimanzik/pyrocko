@@ -7,11 +7,13 @@ from __future__ import absolute_import, print_function, division
 
 import logging
 
-from pyrocko.guts import Object, Bool, List, String, load
+from pyrocko.guts import Object, Bool, List, String, load, StringChoice, Float
 from pyrocko.geometry import arr_vertices, arr_faces
 from pyrocko.gui.qt_compat import qw, qc, fnpatch
-from pyrocko.gui.vtk_util import PolygonPipe
-
+from pyrocko.gui.vtk_util import TrimeshPipe, cpt_to_vtk_lookuptable
+from pyrocko.model import Geometry
+from pyrocko import automap
+from pyrocko.dataset import topo
 from .base import Element, ElementState
 from .. import common
 
@@ -23,11 +25,18 @@ guts_prefix = 'sparrow'
 km = 1e3
 
 
+class CPTChoices(StringChoice):
+
+    choices = ['slip_colors']
+
+
 class GeometryState(ElementState):
 
     visible = Bool.T(default=False)
     geometries = List.T(Geometry.T(), default=[])
     display_parameter = String.T(default='slip')
+    cpt = CPTChoices.T(default='slip_colors')
+    time = Float.T(default=0., optional=True)
 
     def create(self):
         element = GeometryElement()
@@ -43,6 +52,8 @@ class GeometryElement(Element):
         self._state = None
         self._controls = None
         self._pipe = []
+        self._cpt_name = None
+        self._lookuptables = {}
 
     def remove(self):
         if self._parent and self._state:
@@ -82,6 +93,8 @@ class GeometryElement(Element):
         state.add_listener(upd, 'visible')
         state.add_listener(upd, 'geometries')
         state.add_listener(upd, 'display_parameter')
+        state.add_listener(upd, 'cpt')
+        state.add_listener(upd, 'time')
         self._state = state
 
     def unbind_state(self):
@@ -93,6 +106,15 @@ class GeometryElement(Element):
 
         self._listeners = []
         self._state = None
+
+    def update_cpt(self, cpt_name):
+        if cpt_name not in self._lookuptables:
+
+            cpt = automap.read_cpt(topo.cpt(cpt_name))
+            vtk_cpt = cpt_to_vtk_lookuptable(cpt)
+            vtk_cpt.SetNanColor(0.0, 0.0, 0.0, 0.0)
+
+            self._lookuptables[cpt_name] = vtk_cpt
 
     def get_name(self):
         return 'Geometry'
@@ -108,42 +130,46 @@ class GeometryElement(Element):
             return
 
     def load_file(self, path):
-        from pyrocko.table import Geometry
-        
-        g=Geometry()
-        print(g, g.__class__)
+
         loaded_geometry = load(filename=path)
 
         self._parent.remove_panel(self._controls)
         self._controls = None
         self._state.geometries.append(loaded_geometry)
+        self._pipe.append([])
         self._parent.add_panel(
             self.get_name(), self._get_controls(), visible=True)
 
         self.update()
 
+    def get_values(self, geom, state):
+        values = geom.get_property(state.display_parameter)
+
+        if len(values.shape) == 2:
+            idx = geom.time2idx(state.time)
+            print(idx)
+            values = values[:, idx]
+            print(values)
+        return values
+
     def update(self, *args):
 
         state = self._state
+        self.update_cpt(self._state.cpt)
 
         if state.visible:
-            for geo in state.geometries:
-
-                vertices = arr_vertices(geo.vertices.get_col('xyz'))
-                faces = arr_faces(geo.faces.get_col('faces'))
-                values = geo.get_property(state.display_parameter)
-
-                self._pipe.append(
-                    PolygonPipe(
-                        vertices, faces,
-                        values=values, contour=False,
-                        cbar_title=state.display_parameter))
-
-                if isinstance(self._pipe[-1].actor, list):
-                    self._parent.add_actor_list(self._pipe[-1].actor)
+            for i, geo in enumerate(state.geometries):
+                values = self.get_values(geo, state)
+                if not isinstance(self._pipe[i], TrimeshPipe):
+                    vertices = arr_vertices(geo.vertices.get_col('xyz'))
+                    faces = arr_faces(geo.faces.get_col('faces'))
+                    self._pipe[i] = TrimeshPipe(
+                            vertices, faces,
+                            values=values,
+                            lut=self._lookuptables[self._state.cpt])
+                    self._parent.add_actor(self._pipe[i].actor)
                 else:
-                    self._parent.add_actor(self._pipe[-1].actor)
-
+                    self._pipe[i].set_values(values)
         else:
             if self._pipe:
                 self.remove_pipes()
@@ -151,8 +177,10 @@ class GeometryElement(Element):
         self._parent.update_view()
 
     def _get_controls(self):
+        state = self._state
         if not self._controls:
-            from ..state import state_bind_checkbox, state_bind_combobox
+            from ..state import state_bind_checkbox, state_bind_combobox, \
+                                state_bind_slider
 
             frame = qw.QFrame()
             layout = qw.QGridLayout()
@@ -163,26 +191,53 @@ class GeometryElement(Element):
             layout.addWidget(pb, 0, 0)
             pb.clicked.connect(self.open_file_load_dialog)
 
-            # visibility
-            cb = qw.QCheckBox('Show')
-            layout.addWidget(cb, 2, 0)
-            state_bind_checkbox(self, self._state, 'visible', cb)
-
             # property choice
             layout.addWidget(qw.QLabel('Display parameter'), 1, 0)
             cb = qw.QComboBox()
-            if self._state.geometries:
+            if state.geometries:
                 props = []
-                for geom in self._state.geometries:
-                    for prop in geom.propertoes.get_col_names():
+                for geom in state.geometries:
+                    for prop in geom.properties.get_col_names(
+                            sub_headers=False):
                         props.append(prop)
 
                 unique_props = list(set(props))
                 for i, s in enumerate(unique_props):
                     cb.insertItem(i, s)
 
-            layout.addWidget(cb, 1, 1)
-            state_bind_combobox(self, self._state, 'display_parameter', cb)
+                layout.addWidget(cb, 1, 1)
+                state_bind_combobox(self, state, 'display_parameter', cb)
+
+                # times slider
+                values = geom.get_property(state.display_parameter)
+                if len(values.shape) == 2:
+                    slider = qw.QSlider(qc.Qt.Horizontal)
+                    slider.setSizePolicy(
+                        qw.QSizePolicy(
+                            qw.QSizePolicy.Expanding, qw.QSizePolicy.Fixed))
+
+                    slider.setMinimum(geom.times.min())
+                    slider.setMaximum(geom.times.max())
+                    slider.setSingleStep(geom.deltat)
+                    slider.setPageStep(geom.deltat)
+
+                    layout.addWidget(qw.QLabel('Time'), 2, 0)
+                    layout.addWidget(slider, 2, 1)
+
+                    state_bind_slider(
+                        self, state, 'time', slider, dtype=int)
+
+            # color maps
+            cb = common.string_choices_to_combobox(CPTChoices)
+            layout.addWidget(qw.QLabel('CPT'), 3, 0)
+            layout.addWidget(cb, 3, 1)
+            state_bind_combobox(self, state, 'cpt', cb)
+
+            # visibility
+            cb = qw.QCheckBox('Show')
+            layout.addWidget(cb, 4, 0)
+            state_bind_checkbox(self, state, 'visible', cb)
+
 
             self._controls = frame
 

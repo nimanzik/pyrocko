@@ -357,10 +357,27 @@ class PolygonPipe(object):
 
             self.set_values(values)
 
+        nfaces = faces.shape[0]
+        self._colors = num.ones((nfaces, 4))
+        self._update_colors()
+
         if kwargs:
             colorbar_actor = self.get_colorbar_actor(**kwargs)
             colorbar_actor.GetProperty()
             self.actor = [act, colorbar_actor]
+
+    def set_colors(self, colors):
+        self._colors[:, :3] = colors
+        self._update_colors()
+
+    def set_alpha(self, alpha):
+        print('colors', self._colors.shape)
+        self._colors[:, 3] = alpha
+        self._update_colors()
+
+    def _update_colors(self):
+        vcolors = numpy_to_vtk_colors(self._colors)
+        self.polydata.GetPointData().SetScalars(vcolors)
 
     def set_opacity(self, value):
         self.prop.SetOpacity(value)
