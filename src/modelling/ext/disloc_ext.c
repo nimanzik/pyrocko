@@ -254,7 +254,7 @@ void Disloc(double *pOutput, double *pModel, double *pCoords, double nu, int Num
 
 
 int good_array(PyObject* o, npy_intp typenum, npy_intp ndim_want, npy_intp* shape_want) {
-    npy_intp i;
+    unsigned long i;
 
     if (!PyArray_Check(o)) {
         PyErr_SetString(PyExc_AttributeError, "not a NumPy array" );
