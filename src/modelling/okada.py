@@ -529,8 +529,8 @@ class DislocationInverter(object):
 
             for isource, source in enumerate(source_patches):
                 results = okada_ext.okada(
-                    source[num.newaxis, :],
-                    source_disl[num.newaxis, :],
+                    source[num.newaxis, :].copy(),
+                    source_disl[num.newaxis, :].copy(),
                     receiver_coords,
                     lambda_mean,
                     shearmod_mean,
