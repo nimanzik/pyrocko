@@ -10,7 +10,7 @@ import logging
 from pyrocko.guts import Object, Bool, List, String, load, StringChoice, Float
 from pyrocko.geometry import arr_vertices, arr_faces
 from pyrocko.gui.qt_compat import qw, qc, fnpatch
-from pyrocko.gui.vtk_util import TrimeshPipe, cpt_to_vtk_lookuptable
+from pyrocko.gui.vtk_util import TrimeshPipe, ColorbarPipe, cpt_to_vtk_lookuptable
 from pyrocko.model import Geometry
 from pyrocko import automap
 from pyrocko.dataset import topo
@@ -52,6 +52,7 @@ class GeometryElement(Element):
         self._state = None
         self._controls = None
         self._pipe = []
+        self._cbar_pipe = None
         self._cpt_name = None
         self._lookuptables = {}
 
@@ -68,6 +69,11 @@ class GeometryElement(Element):
         for pipe in self._pipe:
             if not isinstance(pipe, list):
                 self._parent.remove_actor(pipe.actor)
+
+        if self._cbar_pipe is not None:
+            self._parent.remove_actor(self._cbar_pipe.actor)
+
+        self._cbar_pipe = None
 
         self.init_pipeslots()
 
@@ -179,17 +185,23 @@ class GeometryElement(Element):
                 state.cpt, state.display_parameter)
             for i, geo in enumerate(state.geometries):
                 values = self.get_values(geo, state)
+                lut = self._lookuptables[cpt_name]
                 if not isinstance(self._pipe[i], TrimeshPipe):
                     vertices = arr_vertices(geo.vertices.get_col('xyz'))
                     faces = arr_faces(geo.faces.get_col('faces'))
                     self._pipe[i] = TrimeshPipe(
                             vertices, faces,
                             values=values,
-                            lut=self._lookuptables[cpt_name])
+                            lut=lut)
+                    self._cbar_pipe = ColorbarPipe(lut=lut, cbar_title=state.display_parameter)
                     self._parent.add_actor(self._pipe[i].actor)
+                    self._parent.add_actor(self._cbar_pipe.actor)
                 else:
                     self._pipe[i].set_values(values)
-                    self._pipe[i].set_lookuptable(self._lookuptables[cpt_name])
+                    self._pipe[i].set_lookuptable(lut)
+
+                    self._cbar_pipe.set_lookuptable(lut)
+                    self._cbar_pipe.set_title(state.display_parameter)
         else:
             if self._pipe:
                 self.remove_pipes()
