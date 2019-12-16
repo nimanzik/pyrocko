@@ -17,6 +17,8 @@ from pyrocko.dataset import topo
 from .base import Element, ElementState
 from .. import common
 
+from matplotlib import pyplot as plt
+
 
 logger = logging.getLogger('geometry')
 
@@ -27,7 +29,7 @@ km = 1e3
 
 class CPTChoices(StringChoice):
 
-    choices = ['slip_colors']
+    choices = ['slip_colors', 'seismic', 'jet', 'hot_r', 'gist_earth_r']
 
 
 class GeometryState(ElementState):
@@ -131,7 +133,12 @@ class GeometryElement(Element):
                 vmins.append(values.min())
                 vmaxs.append(values.max())
 
-            cpt = automap.read_cpt(topo.cpt(state.cpt))
+            if state.cpt == 'slip_colors':
+                cpt = automap.read_cpt(topo.cpt(state.cpt))
+            else:
+                cmap = plt.cm.get_cmap(state.cpt)
+                cpt = automap.CPT.from_numpy(cmap(range(256))[:, :-1])
+
             cpt.scale(min(vmins), min(vmaxs))
 
             vtk_cpt = cpt_to_vtk_lookuptable(cpt)
