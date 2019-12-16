@@ -254,6 +254,27 @@ def check_rect_source_discretisation(points2, nl, nw, store):
     return True
 
 
+def outline_rect_source(strike, dip, length, width, anchor):
+    ln = length
+    wd = width
+
+    points = num.array(
+        [[-0.5 * ln, -0.5 * wd, 0.],
+         [0.5 * ln, -0.5 * wd, 0.],
+         [0.5 * ln, 0.5 * wd, 0.],
+         [-0.5 * ln, 0.5 * wd, 0.],
+         [-0.5 * ln, -0.5 * wd, 0.]])
+
+    anch_x, anch_y = map_anchor[anchor]
+    points[:, 0] -= anch_x * 0.5 * length
+    points[:, 1] -= anch_y * 0.5 * width
+
+    rotmat = num.asarray(
+        pmt.euler_to_matrix(dip * d2r, strike * d2r, 0.0))
+
+    return num.dot(rotmat.T, points.T).T
+
+
 def lists_to_c5(
         ref_lat, ref_lon,
         points=[], north_shifts=[], east_shifts=[], depths=[]):
