@@ -2206,11 +2206,11 @@ class RectangularSource(SourceWithDerivedMagnitude):
                     (latlon, points_rot[:, 2].reshape((len(points_rot),1))),
                     axis=1)
 
-    def outline(self, **kwargs):
+    def outline(self, cs='xyz'):
         x = num.array([-1., 1., 1., -1., -1.])
         y = num.array([-1., -1., 1., 1., -1.])
 
-        return self.xy_to_coord(x, y, **kwargs)
+        return self.xy_to_coord(x, y, cs)
 
     def geometry(self, *args, **kwargs):
         geom = OldGeometry()
