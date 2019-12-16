@@ -10,7 +10,8 @@ import logging
 from pyrocko.guts import Object, Bool, List, String, load, StringChoice, Float
 from pyrocko.geometry import arr_vertices, arr_faces
 from pyrocko.gui.qt_compat import qw, qc, fnpatch
-from pyrocko.gui.vtk_util import TrimeshPipe, ColorbarPipe, cpt_to_vtk_lookuptable
+from pyrocko.gui.vtk_util import TrimeshPipe, ColorbarPipe, \
+    cpt_to_vtk_lookuptable, make_multi_polyline, vtk_set_input
 from pyrocko.model import Geometry
 from pyrocko import automap
 from pyrocko.dataset import topo
@@ -18,6 +19,8 @@ from .base import Element, ElementState
 from .. import common
 
 from matplotlib import pyplot as plt
+import vtk
+from numpy import concatenate
 
 
 logger = logging.getLogger('geometry')
@@ -25,6 +28,50 @@ logger = logging.getLogger('geometry')
 guts_prefix = 'sparrow'
 
 km = 1e3
+
+
+
+class OutlinesPipe(object):
+
+    def __init__(self, geom, color):
+
+        self._polyline_grid = {}
+        self._actors = {}
+
+        lines = []
+        for outline in geom.outlines:
+            latlon = outline.get_col('latlon')
+            depth = outline.get_col('depth')
+
+            points = concatenate(
+                (latlon, depth.reshape(len(depth), 1)),
+                axis=1)
+            points = concatenate((points, points[0].reshape(1, -1)), axis=0)
+
+            lines.append(points)
+
+        for cs in ['latlondepth', 'latlon']:
+            mapper = vtk.vtkDataSetMapper()
+            if cs == 'latlondepth':
+                self._polyline_grid[cs] = make_multi_polyline(
+                    lines_latlondepth=lines)
+            elif cs == 'latlon':
+                self._polyline_grid[cs] = make_multi_polyline(
+                    lines_latlon=lines)
+
+            vtk_set_input(mapper, self._polyline_grid[cs])
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+
+            prop = actor.GetProperty()
+            prop.SetDiffuseColor(color)
+            prop.SetOpacity(1.)
+
+            self._actors[cs] = actor
+
+    def get_actors(self):
+        return list(self._actors.values())
 
 
 class CPTChoices(StringChoice):
@@ -53,8 +100,11 @@ class GeometryElement(Element):
         self._parent = None
         self._state = None
         self._controls = None
+
         self._pipe = []
         self._cbar_pipe = None
+        self._outlines_pipe = None
+
         self._cpt_name = None
         self._lookuptables = {}
 
@@ -75,7 +125,12 @@ class GeometryElement(Element):
         if self._cbar_pipe is not None:
             self._parent.remove_actor(self._cbar_pipe.actor)
 
+        if self._outlines_pipe is not None:
+            for actor in self._outlines_pipe.get_actors():
+                self._parent.remove_actor(actor)
+
         self._cbar_pipe = None
+        self._outlines_pipe = None
 
         self.init_pipeslots()
 
@@ -200,7 +255,14 @@ class GeometryElement(Element):
                             vertices, faces,
                             values=values,
                             lut=lut)
-                    self._cbar_pipe = ColorbarPipe(lut=lut, cbar_title=state.display_parameter)
+                    self._cbar_pipe = ColorbarPipe(
+                        lut=lut, cbar_title=state.display_parameter)
+                    if geo.outlines:
+                        self._outlines_pipe = OutlinesPipe(
+                            geo, color=(1., 1., 1.))
+                        self._parent.add_actor_list(
+                            self._outlines_pipe.get_actors())
+
                     self._parent.add_actor(self._pipe[i].actor)
                     self._parent.add_actor(self._cbar_pipe.actor)
                 else:

@@ -27,6 +27,12 @@ class Geometry(Object):
         help='Face integer indexes to the respective vertices. '
              'Indexes belonging to one polygon have to be given row-wise.',
         optional=True)
+    outlines = List.T(Table.T(),
+        default=[],
+        help='List of vertices of the mesh of the outlines of the geometry. '
+             'Expected to be (lat,lon,north,east,depth) for each vertex'
+             '(outline).',
+        optional=True)
     event = Event.T(default=Event.D())
     times = Array.T(
         shape=(None,),
@@ -49,7 +55,7 @@ class Geometry(Object):
         else:
             return 0
 
-    def setup(self, vertices, faces):
+    def setup(self, vertices, faces, outlines=None):
 
         self.vertices = Table()
         self.vertices.add_recipe(LocationRecipe())
@@ -62,6 +68,18 @@ class Geometry(Object):
         ncorners = faces.shape[1]
         sub_headers = tuple(['f{}'.format(i) for i in range(ncorners)])
         self.faces.add_col(('faces', '', sub_headers), faces)
+
+        if outlines is not None:
+            self.outlines = []
+            for outline in outlines:
+                outl = Table()
+                outl.add_recipe(LocationRecipe())
+                outl.add_col((
+                    'c5', '',
+                    ('ref_lat', 'ref_lon', 'north_shift', 'east_shift',
+                     'depth')),
+                    outline)
+                self.outlines.append(outl)
 
     def add_property(self, name, values):
         self.properties.add_col(name, values)
