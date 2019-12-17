@@ -138,6 +138,12 @@ class GeometryElement(Element):
         self._parent = parent
         self._parent.add_panel(
             self.get_name(), self._get_controls(), visible=True)
+
+        # update = self.update
+        # self._listeners.append(update)
+        # self._parent.state.add_listener(update, 'tmin')
+        # self._parent.state.add_listener(update, 'tmax')
+
         self.update()
 
     def unset_parent(self):
@@ -227,10 +233,12 @@ class GeometryElement(Element):
 
         self.update()
 
-    def get_values(self, geom, state):
-        values = geom.get_property(state.display_parameter)
+    def get_values(self, geom):
+        values = geom.get_property(self._state.display_parameter)
         if len(values.shape) == 2:
-            idx = geom.time2idx(state.time)
+            # if self._parent.state.tmin is not None:
+
+            idx = geom.time2idx(self._state.time)
             values = values[:, idx]
         return values
 
@@ -246,7 +254,7 @@ class GeometryElement(Element):
             cpt_name = self.get_cpt_name(
                 state.cpt, state.display_parameter)
             for i, geo in enumerate(state.geometries):
-                values = self.get_values(geo, state)
+                values = self.get_values(geo)
                 lut = self._lookuptables[cpt_name]
                 if not isinstance(self._pipe[i], TrimeshPipe):
                     vertices = arr_vertices(geo.vertices.get_col('xyz'))
