@@ -12,6 +12,7 @@ from pyrocko.geometry import arr_vertices, arr_faces
 from pyrocko.gui.qt_compat import qw, qc, fnpatch
 from pyrocko.gui.vtk_util import TrimeshPipe, ColorbarPipe, \
     cpt_to_vtk_lookuptable, make_multi_polyline, vtk_set_input
+
 from pyrocko.model import Geometry
 from pyrocko import automap
 from pyrocko.dataset import topo
@@ -139,10 +140,10 @@ class GeometryElement(Element):
         self._parent.add_panel(
             self.get_name(), self._get_controls(), visible=True)
 
-        # update = self.update
-        # self._listeners.append(update)
-        # self._parent.state.add_listener(update, 'tmin')
-        # self._parent.state.add_listener(update, 'tmax')
+        update = self.update
+        self._listeners.append(update)
+        self._parent.state.add_listener(update, 'tmin')
+        self._parent.state.add_listener(update, 'tmax')
 
         self.update()
 
@@ -191,6 +192,9 @@ class GeometryElement(Element):
             vmaxs = []
             for geom in state.geometries:
                 values = geom.get_property(state.display_parameter)
+                if len(values.shape) == 2:
+                    values = values.sum(1)
+
                 vmins.append(values.min())
                 vmaxs.append(values.max())
 
@@ -235,12 +239,37 @@ class GeometryElement(Element):
 
     def get_values(self, geom):
         values = geom.get_property(self._state.display_parameter)
-        if len(values.shape) == 2:
-            # if self._parent.state.tmin is not None:
 
-            idx = geom.time2idx(self._state.time)
-            values = values[:, idx]
-        return values
+        if geom.event is not None:
+            ref_time = geom.event.time
+        else:
+            ref_time = 0.
+
+        if len(values.shape) == 2:
+            tmin = self._parent.state.tmin
+            tmax = self._parent.state.tmax
+            if tmin is not None:
+                ref_tmin = tmin - ref_time
+                ref_idx_min = geom.time2idx(ref_tmin)
+            else:
+                ref_idx_min = geom.time2idx(self._state.time)
+
+            if tmax is not None:
+                ref_tmax = tmax - ref_time
+                ref_idx_max = geom.time2idx(ref_tmax)
+            else:
+                ref_idx_max = geom.time2idx(self._state.time)
+
+            if ref_idx_min == ref_idx_max:
+                out = values[:, ref_idx_min]
+            elif ref_idx_min > ref_idx_max:
+                out = values[:, ref_idx_min]
+            elif ref_idx_max < ref_idx_min:
+                out = values[:, ref_idx_max]
+            else:
+                out = values[:, ref_idx_min:ref_idx_max].sum(1)
+
+        return out
 
     def update(self, *args):
 

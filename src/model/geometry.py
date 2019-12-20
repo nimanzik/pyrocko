@@ -41,6 +41,10 @@ class Geometry(Object):
              'properties have value',
         optional=True)
 
+    def __init__(self, **kwargs):
+        Object.__init__(self, **kwargs)
+        self._ntimes = None
+
     @property
     def deltat(self):
         if self.times.size > 2:
@@ -48,10 +52,27 @@ class Geometry(Object):
         else:
             return 1.
 
-    def time2idx(self, time, dtype='int'):
+    @property
+    def ntimes(self):
+        if self._ntimes is None:
+            if self.times is not None:
+                self._ntimes = len(self.times)
+            else:
+                return 0
+
+        return self._ntimes
+
+    def time2idx(self, time):
         if self.times.size > 2:
-            return round((time - self.times.min() - (
-                self.deltat / 2.)) / self.deltat).astype(dtype)
+            idx = int(round((time - self.times.min() - (
+                    self.deltat / 2.)) / self.deltat))
+
+            if idx < 0:
+                return 0
+            elif idx > self.ntimes:
+                return self.ntimes
+            else:
+                return idx
         else:
             return 0
 
