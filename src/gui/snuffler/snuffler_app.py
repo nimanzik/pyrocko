@@ -135,7 +135,7 @@ class SchoolSeismometerAcquisition(
 
     def __init__(self, *args, **kwargs):
         serial_hamster.SerialHamster.__init__(self, *args, **kwargs)
-        AcquisitionThread.__init__(self, post_process_sleep=0.01)
+        AcquisitionThread.__init__(self, post_process_sleep=0.0)
 
     def got_trace(self, tr):
         AcquisitionThread.got_trace(self, tr)
@@ -223,7 +223,7 @@ def setup_acquisition_sources(args):
             port = msc.group(1)
             sco = SchoolSeismometerAcquisition(
                 port=port,
-                buffersize=5,
+                #buffersize=5,
                 deltat=1.0/79.719,
                 disallow_uneven_sampling_rates=False)
 

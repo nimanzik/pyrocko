@@ -111,6 +111,7 @@ class SerialHamster(object):
 
         self.min_detection_size = 5
         self.last_print = 0.0
+        self._debug_out = open('temp_dump.txt', 'w')
 
     def add_listener(self, obj):
         self.listeners.append(weakref.ref(obj))
@@ -184,8 +185,11 @@ class SerialHamster(object):
             self.values[0].append(val)
             self.times.append(t)
 
+            self._debug_out.write('%f %i\n' % (t, val))
+
             if len(self.values[0]) >= self.buffersize:
                 self._flush_buffer()
+                self._debug_out.flush()
 
         return True
 
