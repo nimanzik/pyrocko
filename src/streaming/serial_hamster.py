@@ -77,12 +77,14 @@ class SerialHamster(object):
 
     def __init__(
             self, port=0, baudrate=9600, timeout=5, buffersize=128,
+            start_string=None,
             network='', station='TEST', location='', channels=['Z'],
             disallow_uneven_sampling_rates=True,
             deltat=None,
             deltat_tolerance=0.01,
             in_file=None,
             lookback=5,
+            min_detection_size=5,
             tune_to_quickones=True):
 
         self.port = port
@@ -108,9 +110,9 @@ class SerialHamster(object):
         self.listeners = []
         self.quit_requested = False
         self.tune_to_quickones = tune_to_quickones
+        self.start_string = start_string
 
-        self.min_detection_size = 5
-        self.last_print = 0.0
+        self.min_detection_size = min_detection_size
         self._debug_out = open('temp_dump.txt', 'w')
 
     def add_listener(self, obj):
@@ -145,7 +147,8 @@ class SerialHamster(object):
 
     def send_start(self):
         ser = self.ser
-        ser.write(b'4c')
+        if self.start_string is not None:
+            ser.write(self.start_string.encode('ascii'))
 
     def acquisition_stop(self):
         if self.ser is not None:
@@ -260,9 +263,6 @@ class SerialHamster(object):
             tmin_offset = r_tmin - continuous_tmin
             try:
                 tnow = time.time()
-                if self.last_print < tnow - 20.:
-                    print(self.previous_tmin_offsets)
-                    self.last_print = tnow
 
                 toffset = self.previous_tmin_offsets.median()
                 if abs(toffset) > self.deltat*0.7 \
