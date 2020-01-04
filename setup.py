@@ -579,6 +579,7 @@ subpacknames = [
     'pyrocko.gui.snuffler.snufflings.map',
     'pyrocko.gui.sparrow',
     'pyrocko.gui.sparrow.elements',
+    'pyrocko.gui.drum',
     'pyrocko.dataset',
     'pyrocko.dataset.topo',
     'pyrocko.streaming',
@@ -597,6 +598,7 @@ entry_points = {
          'jackseis = pyrocko.apps.jackseis:main',
          'colosseo = pyrocko.apps.colosseo:main',
          'sparrow = pyrocko.apps.sparrow:main',
+         'drum = pyrocko.apps.drum:main',
          'sparrow%i = pyrocko.apps.sparrow:main' % sys.version_info.major],
     'gui_scripts':
         ['snuffler = pyrocko.apps.snuffler:main']

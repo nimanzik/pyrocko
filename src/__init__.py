@@ -33,6 +33,17 @@ def sparrow(*args, **kwargs):
     return main(*args, **kwargs)
 
 
+def drum(*args, **kwargs):
+    '''
+    Start Drum Plot.
+
+    Calls :py:func:`pyrocko.gui.drum.main`.
+    '''
+
+    from pyrocko.gui.drum.main import main
+    return main(*args, **kwargs)
+
+
 class DependencyMissing(Exception):
     pass
 
