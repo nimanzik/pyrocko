@@ -7,6 +7,8 @@ from __future__ import absolute_import, print_function, division
 
 import math
 
+import numpy as num
+
 from pyrocko.guts import Object, Float, StringChoice, Int, String, Bool, \
     Tuple, List
 
@@ -45,6 +47,11 @@ class Filter(Object):
     def tpad(self):
         return 0.0
 
+
+class Demean(Filter):
+    def apply(self, tr):
+        tr.ydata = tr.ydata - num.mean(tr.ydata)
+        
 
 class ButterLowpass(Filter):
     order = Int.T(default=4)

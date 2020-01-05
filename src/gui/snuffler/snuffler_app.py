@@ -236,6 +236,7 @@ def setup_acquisition_sources(args):
                 '80': ('c', 79.719)}
 
             s_rate = d.get('rate', '80')
+            station = d.get('station', 'TEST')
 
             if s_rate not in d_rate:
                 raise Exception(
@@ -261,7 +262,8 @@ def setup_acquisition_sources(args):
                 deltat=deltat,
                 start_string=start_string,
                 min_detection_size=50,
-                disallow_uneven_sampling_rates=False)
+                disallow_uneven_sampling_rates=False,
+                station=station)
 
             sources.append(sco)
 

@@ -481,6 +481,7 @@ class DrumViewMain(qw.QWidget, Listener):
         self._access_counter = 0
         self._waiting_for_first_data = True
 
+        self._init_touch()
         self._init_following()
 
         sal = self.state.add_listener
@@ -706,18 +707,6 @@ class DrumViewMain(qw.QWidget, Listener):
 
     # qt event handlers
 
-    def event(self, event):
-        print(event)
-        if event.type() in (
-                qc.QEvent.TouchBegin,
-                qc.QEvent.TouchUpdate,
-                qc.QEvent.TouchEnd,
-                qc.QEvent.TouchCancel):
-
-            return self.touch_event(event)
-
-        return qw.QWidget.event(self, event)
-
     def paintEvent(self, event):
         plotenv = PlotEnv(self)
         plotenv.style = self.state.style
@@ -727,6 +716,41 @@ class DrumViewMain(qw.QWidget, Listener):
             plotenv.setRenderHint(qg.QPainter.Antialiasing)
 
         self._draw(plotenv)
+
+    def event(self, event):
+
+        if event.type() in (
+                qc.QEvent.TouchBegin,
+                qc.QEvent.TouchUpdate,
+                qc.QEvent.TouchEnd,
+                qc.QEvent.TouchCancel):
+
+            return self._touch_event(event)
+
+        return qw.QWidget.event(self, event)
+
+    def _init_touch(self):
+        self._gesture = None
+
+    def _touch_event(self, event):
+        if event.type() == qc.QEvent.TouchBegin:
+            self._gesture = DrumGesture(self)
+            self._gesture.update(event)
+
+        elif event.type() == qc.QEvent.TouchUpdate:
+            self._gesture.update(event)
+          
+        elif event.type() == qc.QEvent.TouchEnd:
+            self._gesture.update(event)
+            self._gesture.end()
+            self._gesture = None
+
+        elif event.type() == qc.QEvent.TouchCancel:
+            self._gesture.update(event)
+            self._gesture.cancel()
+            self._gesture = None
+
+        return True
 
     def wheelEvent(self, event):
 
@@ -790,3 +814,100 @@ class DrumViewMain(qw.QWidget, Listener):
 
         elif keytext == 'p':
             print(self.state)
+
+
+tline_choices = [10., 30., 60., 120., 300., 600., 1200., 3600.]
+
+class DrumGesture(object):
+
+    def __init__(self, view):
+        self._view = view
+        self._active = False
+        self.begin()
+
+    def begin(self):
+        self._active = True
+        self._iline = self._view.state.iline
+        self._nlines = self._view.state.nlines
+        self._tline = self._view.state.tline
+        self._proj = self._view._project_iline_to_screen
+        self._gain = self._view.state.scaling.gain
+        self._max_len_tps = 0
+
+    def end(self):
+        self._active = False
+
+    def cancel(self):
+        self.end()
+
+    def update(self, event):
+        if not self._active:
+            return
+
+        tps = event.touchPoints()
+        proj = self._proj
+
+        self._max_len_tps = max(len(tps), self._max_len_tps)
+
+        if len(tps) == 1 and self._max_len_tps < 2:
+            tp = tps[0]
+            iline = proj.y(tp.pos().y())
+            iline_start = proj.y(tp.startPos().y())
+            idelta = int(round(iline - iline_start))
+            iline = self._iline - idelta
+            if iline != self._view.state.iline:
+                self._view.interrupt_following()
+                self._view.state.iline = iline
+
+        if len(tps) == 2:
+            #self._view.state.iline = self._iline
+
+            u = [
+                (tp.pos().x(), tp.startPos().x())
+                for tp in tps]
+
+            y = [
+                (proj.y(tp.pos().y()), proj.y(tp.startPos().y()))
+                for tp in tps]
+
+            v = [
+                (tp.pos().y(), tp.startPos().y())
+                for tp in tps]
+
+            if abs(u[0][1] - u[1][1]) < abs(v[0][1] - v[1][1]):
+
+                vclip = self._view.size().height() * 0.05
+                d0 = max(vclip, abs(v[0][1] - v[1][1]))
+                d1 = max(vclip, abs(v[0][0] - v[1][0]))
+
+                nlines = min(max(1, int(round(self._nlines * (d0 / d1)))), 50)
+
+                idelta = int(round(0.5 * ((y[0][0]+y[1][0]) - (y[0][1]+y[1][1])) * (nlines / self._nlines)))
+                iline = self._iline - idelta
+                
+                self._view.interrupt_following
+                if self._view.state.nlines != nlines or self._view.state.iline != iline:
+                    self._view.interrupt_following()
+                    self._view.state.iline = iline
+                    self._view.state.nlines = nlines
+
+            else:
+                if abs(u[0][0] - u[0][1]) + abs(u[1][0] - u[1][1]) > abs(v[0][0] - v[0][1]) + abs(v[1][0] - v[1][1]):
+                    ustretch = abs(u[0][1] - u[1][1]) / (abs(u[0][0] - u[1][0]) + self._view.size().width() * 0.05)
+                    
+                    print('ustretch', ustretch)
+                    log_tline_choices = num.log(tline_choices)
+                    log_tline = num.log(ustretch * self._tline)
+
+                    ichoice = num.argmin(num.abs(log_tline_choices - log_tline))
+                    tline = tline_choices[ichoice]
+                    yanchor = 0.5 * (y[0][1] + y[1][1])
+                    # r = (yanchor - proj.ymin) / (proj.ymax - proj.ymin)
+
+                    if self._view.state.tline != tline:
+                        self._view.state.iline = int(round(self._iline / (tline / self._tline)))
+                        self._view.state.tline = tline
+
+                else:
+                    vstretch = 10**(-((v[0][0] - v[0][1]) + (v[1][0] - v[1][1])) / self._view.size().height())
+                    self._view.state.scaling.gain = self._gain * vstretch

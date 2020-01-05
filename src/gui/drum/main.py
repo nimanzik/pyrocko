@@ -16,7 +16,7 @@ from pyrocko import pile, orthodrome, cake
 from pyrocko.client import catalog
 from pyrocko.gui.util import EventMarker, PhaseMarker
 
-from pyrocko.gui.drum import view
+from pyrocko.gui.drum import view, state
 
 pjoin = os.path.join
 
@@ -112,7 +112,7 @@ app = None
 def main(*args, **kwargs):
 
     from pyrocko import util
-    from pyrocko.gui.snuffler_app import PollInjector, \
+    from pyrocko.gui.snuffler.snuffler_app import PollInjector, \
         setup_acquisition_sources
 
     util.setup_logging('drumplot', 'info')
@@ -122,8 +122,8 @@ def main(*args, **kwargs):
 
     p = pile.Pile()
 
-    paths = ['school:///dev/ttyACM0?rate=40&gain=2']
-    store_path = 'test_data_drumplot'
+    paths = ['school:///dev/ttyACM0?rate=40&gain=4&station=LEGO']
+    store_path = 'recording'
     if not os.path.exists(store_path):
         os.mkdir(store_path)
 
@@ -171,6 +171,11 @@ def main(*args, **kwargs):
     # win.state.style.trace_color = state.Color(r=0.9,g=0.9,b=0.9)
     # win.state.style.title_textstyle.color = state.Color(r=1.0,g=1.0,b=1.0)
     # win.state.style.label_textstyle.color = state.Color(r=1.0,g=1.0,b=1.0)
+    win.state.filters = [state.Demean()]
+    win.state.scaling.min = -100.
+    win.state.scaling.max = 100.
+    win.state.scaling.mode = 'fixed'
+
     win.state.follow = True
 
     # pile_nsl = set(x[:3] for x in p.nslc_ids.keys())
