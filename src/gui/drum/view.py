@@ -10,7 +10,7 @@ import time
 import weakref
 import numpy as num
 
-from pyrocko.gui.qt_compat import qc, qg, qw
+from pyrocko.gui.qt_compat import qc, qg, qw, use_pyqt5
 
 from pyrocko.gui.talkie import Listener
 from pyrocko.gui.drum.state import State, TextStyle
@@ -33,7 +33,7 @@ class Label(object):
         if style is None:
             style = TextStyle()
 
-        text = qw.QTextDocument()
+        text = qg.QTextDocument()
         font = style.qt_font
         if font:
             text.setDefaultFont(font)
@@ -124,7 +124,7 @@ class Label(object):
             oldpen = p.pen()
             oldbrush = p.brush()
             if not self.style.outline:
-                p.setPen(qg.QPen(qg.Qt.NoPen))
+                p.setPen(qg.QPen(qc.Qt.NoPen))
 
             p.setBrush(self.style.background_color.qt_color)
             if poly:
@@ -342,13 +342,13 @@ class DrumLine(qc.QObject, Listener):
         n = tr.data_len()
         if trace_resolution > 0 \
                 and n > 2 \
-                and tr.deltat < 0.5/trace_resolution*self._time_per_pixel:
+                and tr.deltat < 0.5 / trace_resolution*self._time_per_pixel:
 
-            spp = int(self._time_per_pixel/tr.deltat/trace_resolution)
+            spp = int(self._time_per_pixel / tr.deltat / trace_resolution)
             if tr not in self._ydata_cache:
-                nok = (tr.data_len()/spp) * spp
+                nok = (tr.data_len() // spp) * spp
                 ydata_rs = tr.ydata[:nok].reshape((-1, spp))
-                ydata = num.empty((nok/spp)*2)
+                ydata = num.empty((nok // spp)*2)
                 ydata[::2] = num.min(ydata_rs, axis=1)
                 ydata[1::2] = num.max(ydata_rs, axis=1)
                 self._ydata_cache[tr] = ydata
@@ -464,6 +464,8 @@ class DrumViewMain(qw.QWidget, Listener):
     def __init__(self, pile, *args):
         qw.QWidget.__init__(self, *args)
 
+        self.setAttribute(qc.Qt.WA_AcceptTouchEvents, True)
+
         st = self.state = State()
         self.markers = MarkerStore()
         self.markers.add_listener(self.listener_no_args(self._markers_changed))
@@ -478,7 +480,8 @@ class DrumViewMain(qw.QWidget, Listener):
             (st.iline-0.5, st.iline+st.nlines+0.5), (0., self.height()))
         self._access_counter = 0
         self._waiting_for_first_data = True
-        self._follow_timer = None
+
+        self._init_following()
 
         sal = self.state.add_listener
 
@@ -535,11 +538,39 @@ class DrumViewMain(qw.QWidget, Listener):
 
         self.update()
 
+    def _init_following(self):
+        self._follow_timer = None
+        self._following_interrupted = False
+        self._following_interrupted_tstart = None
+
+    def interrupt_following(self):
+        self._following_interrupted = True
+        self._following_interrupted_tstart = time.time()
+
     def _follow_update(self):
+        if self._following_interrupted:
+            now = time.time()
+            if self._following_interrupted_tstart < now - 20.:
+                self._following_interrupted = False
+            else:
+                return
+
         now = time.time()
         iline = int(math.ceil(now / self.state.tline))-self.state.nlines
         if iline != self.state.iline:
             self.state.iline = iline
+
+    def _adjust_follow(self):
+        follow = self.state.follow
+        if follow and not self._follow_timer:
+            self._follow_timer = qc.QTimer(self)
+            self._follow_timer.timeout.connect(self._follow_update)
+            self._follow_timer.setInterval(1000)
+            self._follow_update()
+            self._follow_timer.start()
+
+        elif not follow and self._follow_timer:
+            self._follow_timer.stop()
 
     def _draw(self, plotenv):
         self._adjust_first_data()
@@ -666,18 +697,6 @@ class DrumViewMain(qw.QWidget, Listener):
         self.setAutoFillBackground(True)
         self.setPalette(p)
 
-    def _adjust_follow(self):
-        follow = self.state.follow
-        if follow and not self._follow_timer:
-            self._follow_timer = qc.QTimer(self)
-            self._follow_timer.timeout.connect(self._follow_update)
-            self._follow_timer.setInterval(1000)
-            self._follow_update()
-            self._follow_timer.start()
-
-        elif not follow and self._follow_timer:
-            self._follow_timer.stop()
-
     def _adjust_first_data(self):
         if self._waiting_for_first_data:
             if self.pile.tmin:
@@ -687,7 +706,19 @@ class DrumViewMain(qw.QWidget, Listener):
 
     # qt event handlers
 
-    def paintEvent(self, paint_ev):
+    def event(self, event):
+        print(event)
+        if event.type() in (
+                qc.QEvent.TouchBegin,
+                qc.QEvent.TouchUpdate,
+                qc.QEvent.TouchEnd,
+                qc.QEvent.TouchCancel):
+
+            return self.touch_event(event)
+
+        return qw.QWidget.event(self, event)
+
+    def paintEvent(self, event):
         plotenv = PlotEnv(self)
         plotenv.style = self.state.style
         plotenv.widget = self
@@ -697,9 +728,16 @@ class DrumViewMain(qw.QWidget, Listener):
 
         self._draw(plotenv)
 
-    def wheelEvent(self, wheel_event):
-        self._wheel_pos += wheel_event.delta()
-        n = self._wheel_pos / 120
+    def wheelEvent(self, event):
+
+        self.interrupt_following()
+
+        if use_pyqt5:
+            self._wheel_pos += event.angleDelta().y()
+        else:
+            self._wheel_pos += event.delta()
+
+        n = self._wheel_pos // 120
         self._wheel_pos = self._wheel_pos % 120
         if n == 0:
             return
@@ -707,11 +745,11 @@ class DrumViewMain(qw.QWidget, Listener):
         amount = max(1., self.state.nlines/24.)
         wdelta = amount * n
 
-        if wheel_event.modifiers() & qc.Qt.ControlModifier:
+        if event.modifiers() & qc.Qt.ControlModifier:
             proj = self._project_iline_to_screen
 
             anchor = (
-                proj.y(wheel_event.y()) - proj.ymin) / (proj.ymax - proj.ymin)
+                proj.y(event.y()) - proj.ymin) / (proj.ymax - proj.ymin)
 
             nlines = max(1, self.state.nlines + int(round(wdelta)))
 
@@ -729,21 +767,26 @@ class DrumViewMain(qw.QWidget, Listener):
             self.state.iline -= int(wdelta)
             self._iline_float = None
 
-    def keyPressEvent(self, key_event):
+    def keyPressEvent(self, event):
 
-        keytext = str(key_event.text())
+        keytext = str(event.text())
 
-        if key_event.key() == qc.Qt.Key_PageDown:
+        if event.key() == qc.Qt.Key_PageDown:
+            self.interrupt_following()
             self.state.iline += self.state.nlines
 
-        elif key_event.key() == qc.Qt.Key_PageUp:
+        elif event.key() == qc.Qt.Key_PageUp:
+            self.interrupt_following()
             self.state.iline -= self.state.nlines
 
         elif keytext == '+':
             self.state.scaling.gain *= 1.5
 
         elif keytext == '-':
-            self.state.scaling.gain *= 1.0/1.5
+            self.state.scaling.gain *= 1.0 / 1.5
 
         elif keytext == ' ':
             self.next_nslc()
+
+        elif keytext == 'p':
+            print(self.state)

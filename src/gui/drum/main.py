@@ -12,7 +12,7 @@ import signal
 import gc
 
 from pyrocko.gui.qt_compat import qw
-from pyrocko import pile, orthodrome, cake, model
+from pyrocko import pile, orthodrome, cake
 from pyrocko.client import catalog
 from pyrocko.gui.util import EventMarker, PhaseMarker
 
@@ -143,6 +143,11 @@ def main(*args, **kwargs):
             store_path,
             '%(network)s.%(station)s.%(location)s.%(channel)s.%(tmin)s.mseed')
 
+    if app is None:
+        app = App()
+
+    win = view.DrumViewMain(p)
+
     pollinjector = PollInjector(
         p,
         fixation_length=store_interval,
@@ -152,8 +157,6 @@ def main(*args, **kwargs):
         source.start()
         pollinjector.add_source(source)
 
-    stations_fn = '/data/heimann/chile-2008/meta/stations.txt'
-
     fns = util.select_files(
         paths,
         selector=None,
@@ -162,31 +165,27 @@ def main(*args, **kwargs):
 
     p.load_files(fns, show_progress=False)
 
-    win = view.DrumViewMain(p)
     win.state.style.antialiasing = True
+    win.state.tline = 600.
     # win.state.style.background_color = state.Color(r=0.2,g=0.27,b=0.36)
     # win.state.style.trace_color = state.Color(r=0.9,g=0.9,b=0.9)
     # win.state.style.title_textstyle.color = state.Color(r=1.0,g=1.0,b=1.0)
     # win.state.style.label_textstyle.color = state.Color(r=1.0,g=1.0,b=1.0)
-    if len(sys.argv) == 1:
-        win.state.follow = True
+    win.state.follow = True
 
-    pile_nsl = set(x[:3] for x in p.nslc_ids.keys())
-    stations = [
-        s for s in model.load_stations(stations_fn) if s.nsl() in pile_nsl]
+    # pile_nsl = set(x[:3] for x in p.nslc_ids.keys())
+    # stations = [
+    #     s for s in model.load_stations(stations_fn) if s.nsl() in pile_nsl]
 
-    emarks = event_markers(p.tmin, p.tmax)
-    pmarks = phase_markers(
-        events=[m.get_event() for m in emarks],
-        stations=stations)
-
-    win.markers.insert_many(emarks)
-    win.markers.insert_many(pmarks)
+    # emarks = event_markers(p.tmin, p.tmax)
+    # pmarks = phase_markers(
+    #     events=[m.get_event() for m in emarks],
+    #     stations=stations)
+    #
+    # win.markers.insert_many(emarks)
+    # win.markers.insert_many(pmarks)
 
     win.show()
-
-    if app is None:
-        app = App()
 
     app.set_main_window(win)
 

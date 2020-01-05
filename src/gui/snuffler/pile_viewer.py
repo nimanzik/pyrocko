@@ -1090,7 +1090,10 @@ def MakePileViewerMainClass(base):
             self.timer.timeout.connect(self.periodical)
             self.timer.setInterval(1000)
             self.timer.start()
-            self.pile.add_listener(self)
+
+            self._pile_changed = self.pile_changed  # need to keep a strong ref
+            self.pile.add_listener(self._pile_changed)
+
             self.trace_styles = {}
             self.determine_box_styles()
             self.setMouseTracking(True)
@@ -1348,7 +1351,7 @@ def MakePileViewerMainClass(base):
 
         def add_shadow_pile(self, shadow_pile):
             shadow_pile.set_basepile(self.pile)
-            shadow_pile.add_listener(self)
+            shadow_pile.add_listener(self._pile_changed)
             self.pile = shadow_pile
 
         def remove_shadow_piles(self):
@@ -1563,7 +1566,7 @@ def MakePileViewerMainClass(base):
         def get_pile(self):
             return self.pile
 
-        def pile_changed(self, what):
+        def pile_changed(self, what, content):
             self.pile_has_changed = True
             self.pile_has_changed_signal.emit()
             if self.automatic_updates:

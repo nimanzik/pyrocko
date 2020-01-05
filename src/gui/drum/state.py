@@ -21,8 +21,8 @@ class Color(Object):
 
     @property
     def qt_color(self):
-        from PyQt4.QtGui import QColor
-        color = QColor(*(int(round(x*255)) for x in (
+        from pyrocko.gui.qt_compat import qg
+        color = qg.QColor(*(int(round(x*255)) for x in (
             self.r, self.g, self.b, self.a)))
         return color
 
@@ -88,8 +88,8 @@ class TextStyle(talkie.Talkie):
 
     @property
     def qt_font(self):
-        from PyQt4.QtGui import QFont
-        font = QFont(self.family)
+        from pyrocko.gui.qt_compat import qg
+        font = qg.QFont(self.family)
         font.setPointSizeF(self.size)
         font.setBold(self.bold)
         font.setItalic(self.italic)
