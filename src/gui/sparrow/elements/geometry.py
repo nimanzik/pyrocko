@@ -227,6 +227,13 @@ class GeometryElement(Element):
     def load_file(self, path):
 
         loaded_geometry = load(filename=path)
+        props = loaded_geometry.properties.get_col_names(sub_headers=False)
+
+        if props and self._state.display_parameter not in props:
+            self._state.display_parameter = props[0]
+        else:
+            raise ValueError(
+                'Imported geometry contains no property to be displayed!')
 
         self._parent.remove_panel(self._controls)
         self._controls = None
