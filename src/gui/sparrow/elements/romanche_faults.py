@@ -29,11 +29,11 @@ def color(x):
 fault_color_themes = {
     'light': {
         'Normal': color('skyblue1'),
-        'Reverse': color('scarletred1'),
-        'SS': color('chameleon1'),
-        'Sinistral': color('plum1'),
-        'Dextral': color('plum1'),
-        None: color('chocolate1')},
+        'Reverse': color('skyblue1'),
+        'SS': color('skyblue1'),
+        'Sinistral': color('skyblue1'),
+        'Dextral': color('skyblue1'),
+        None: color('skyblue1')},
     'dark': {
         'Normal': color('skyblue3'),
         'Reverse': color('scarletred3'),
