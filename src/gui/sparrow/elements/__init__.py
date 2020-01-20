@@ -18,5 +18,6 @@ from .hud import *  # noqa
 from .volcanoes import *  # noqa
 from .kite_insar import *  # noqa
 from .active_faults import *
+from .romanche_faults import *
 from .plates import *
 from .geometry import *  # noqa

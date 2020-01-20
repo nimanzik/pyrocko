@@ -162,6 +162,7 @@ class Viewer(qw.QMainWindow):
                     template='Awesome')),
                 ('Volcanoes', elements.VolcanoesState()),
                 ('Faults', elements.ActiveFaultsState()),
+                ('Pilab - Faults', elements.RomActiveFaultsState()),
                 ('Plate bounds', elements.PlatesBoundsState()),
                 ('InSAR Surface Displacements', elements.KiteState()),
                 ('Geometry', elements.GeometryState())]:
