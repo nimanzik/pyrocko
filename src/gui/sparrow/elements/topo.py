@@ -60,7 +60,7 @@ class TopoMeshPipe(TrimeshPipe):
             factors = \
                 (cake.earthradius + self._tile.data.flatten()*exaggeration) \
                 / (cake.earthradius + self._tile.data.flatten())
-            self.set_vertices(self._raw_vertices * factors[:, num.newaxis])
+            self.set_vertices(1.003*self._raw_vertices * factors[:, num.newaxis])
             self._exaggeration = exaggeration
 
 
