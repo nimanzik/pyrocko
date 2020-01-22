@@ -8,7 +8,6 @@ import logging
 from pyrocko import moment_tensor as mt
 import pyrocko.guts as guts
 from pyrocko.guts import Bool, Float, String, Timestamp
-# from pyrocko.gf import Source
 from pyrocko.model import Location
 from pyrocko.modelling import disloc_ext, okada_ext
 

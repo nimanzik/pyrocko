@@ -721,6 +721,7 @@ setup(
             include_dirs=[get_python_inc()],
             extra_compile_args=['-Wno-parentheses', '-Wno-uninitialized'],
             extra_link_args=[] if sys.platform != 'sunos5' else ['-Wl,-x']),
+
         Extension(
             'modelling.disloc_ext',
             include_dirs=[get_python_inc(), numpy.get_include()],
