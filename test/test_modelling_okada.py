@@ -4,8 +4,7 @@ import numpy as num
 import unittest
 
 from pyrocko import util
-from pyrocko.modelling import DislocProcessor, DislocationInverter,\
-    okada_ext, OkadaSource
+from pyrocko.modelling import DislocationInverter, okada_ext, OkadaSource
 
 
 d2r = num.pi / 180.
@@ -88,100 +87,6 @@ class OkadaTestCase(unittest.TestCase):
                 [slip**2, opening**2]))
 
         assert source_list2[0].seismic_moment == seismic_moment
-
-    def test_okada_vs_disloc_single_source(self):
-        north = 0.
-        east = 0.
-        depth = 10. * km
-        length = 50. * km
-        width = 10. * km
-
-        strike = 45.
-        dip = 89.
-        rake = 90.
-        slip = 0.0
-        opening = 1.
-        poisson = 0.25
-        mu = 32.0e9
-        lamb = (2 * poisson * mu) / (1 - 2 * poisson)
-
-        nthreads = 0
-
-        al1 = -length / 2.
-        al2 = length / 2.
-        aw1 = -width
-        aw2 = 0.
-
-        nrec_north = 100
-        nrec_east = 200
-        rec_north = num.linspace(
-            -2. * length + north, 2. * length + north, nrec_north)
-        rec_east = num.linspace(
-            -2. * length + east, 2. * length + east, nrec_east)
-        nrec = nrec_north * nrec_east
-        receiver_coords = num.zeros((nrec, 3))
-        receiver_coords[:, 0] = num.tile(rec_north, nrec_east)
-        receiver_coords[:, 1] = num.repeat(rec_east, nrec_north)
-
-        segments = [OkadaSource(
-            lat=0., lon=0.,
-            north_shift=north, east_shift=east,
-            depth=depth, al1=al1, al2=al2, aw1=aw1, aw2=aw2,
-            strike=strike, dip=dip,
-            rake=rake, slip=slip, opening=opening,
-            poisson=poisson, shearmod=mu)]
-
-        res_ok2d = DislocProcessor.process(
-            segments, num.array(receiver_coords[:, ::-1][:, 1:]))
-
-        source_patch = num.array([patch.source_patch() for patch in segments])
-        source_disl = num.array([patch.source_disloc() for patch in segments])
-        res_ok3d = okada_ext.okada(
-            source_patch, source_disl, receiver_coords, lamb, mu, nthreads)
-
-        def compare_plot(param1, param2):
-            import matplotlib.pyplot as plt
-
-            valmin = num.min([param1, param2])
-            valmax = num.max([param1, param2])
-
-            def add_subplot(
-                fig, param, ntot, n, sharedaxis=None, title='',
-                    vmin=None, vmax=None):
-
-                ax = fig.add_subplot(
-                    ntot, 1, n, sharex=sharedaxis, sharey=sharedaxis)
-                scat = ax.scatter(
-                    receiver_coords[:, 1], receiver_coords[:, 0], s=20,
-                    c=param, vmin=vmin, vmax=vmax, cmap='seismic',
-                    edgecolor='None')
-                fig.colorbar(scat, shrink=0.8, aspect=5)
-                rect = plt.Rectangle((
-                    -num.sin(strike * d2r) * length / 2.,
-                    -num.cos(strike * d2r) * length / 2.),
-                    num.cos(dip * d2r) * width, length,
-                    angle=-strike, edgecolor='green', facecolor='None')
-                ax.add_patch(rect)
-                ax.set_title(title)
-                plt.axis('equal')
-                return ax
-
-            fig = plt.figure()
-            ax = add_subplot(
-                fig, 100. * (param1 - param2) / num.max(num.abs([
-                    valmin, valmax])), 3, 1,
-                title='Okada Surface minus Okada Halfspace [%]')
-            add_subplot(
-                fig, param1, 3, 2, sharedaxis=ax,
-                title='Okada Surface', vmin=valmin, vmax=valmax)
-            add_subplot(
-                fig, param2, 3, 3, sharedaxis=ax,
-                title='Okada Halfspace', vmin=valmin, vmax=valmax)
-
-            plt.show()
-
-        if show_plot:
-            compare_plot(res_ok2d['displacement.e'], res_ok3d[:, 1])
 
     def test_okada_online_example(self):
         source_list = [OkadaSource(

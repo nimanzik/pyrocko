@@ -7,10 +7,9 @@ import logging
 
 from pyrocko import moment_tensor as mt
 import pyrocko.guts as guts
-from pyrocko.guts import Bool, Float, String, Timestamp
-# from pyrocko.gf import Source
+from pyrocko.guts import Float, String, Timestamp
 from pyrocko.model import Location
-from pyrocko.modelling import disloc_ext, okada_ext
+from pyrocko.modelling import okada_ext
 
 guts_prefix = 'modelling'
 
@@ -188,41 +187,6 @@ class OkadaSource(AnalyticalRectangularSource):
 
         return 2. / 3 * num.log10(self.seismic_moment * 1e7) - 10.7
 
-    def disloc_source(self, dsrc=None):
-        '''
-        Build array for disloc_ext input
-
-        :param dsrc: optional, :py:class:`numpy.ndarray`
-        :type dsrc: array containing source information, which will be
-        overwritten
-
-        :return: array of the source data as input for disloc_ext
-        :rtype: :py:class:`numpy.ndarray`, ``(1, 10)``
-        '''
-
-        if dsrc is None or dsrc.shape != tuple(9, ):
-            dsrc = num.empty(10)
-
-        dip = self.dip
-        if self.dip == 90.:
-            dip -= 1e-2
-
-        dsrc[0] = self.length
-        dsrc[1] = self.width
-        dsrc[2] = self.depth
-        dsrc[3] = -dip
-        dsrc[4] = self.strike - 180.
-        dsrc[5] = self.easting
-        dsrc[6] = self.northing
-
-        ss_slip = num.cos(self.rake * d2r) * self.slip
-        ds_slip = num.sin(self.rake * d2r) * self.slip
-        dsrc[7] = -ss_slip  # SS Strike-Slip
-        dsrc[8] = -ds_slip  # DS Dip-Slip
-        dsrc[9] = self.opening  # TS Tensional-Slip
-
-        return dsrc
-
     def source_patch(self):
         '''
         Build source information array for okada_ext.okada input
@@ -327,16 +291,6 @@ class OkadaSource(AnalyticalRectangularSource):
             depth=coord[2], al1=al1, al2=al2, aw1=aw1, aw2=aw2,
             **kwargs)
             for coord in source_points_rot], source_points
-
-    @property
-    def segments(self):
-        yield self
-
-
-class OkadaSegment(OkadaSource):
-    enabled = Bool.T(
-        default=True,
-        optional=True)
 
 
 class DislocationInverter(object):
@@ -637,41 +591,7 @@ class DislocationInverter(object):
                 return disloc_est.reshape(-1,)
 
 
-class ProcessorProfile(dict):
-    pass
-
-
-class AnalyticalSourceProcessor(object):
-    pass
-
-
-class DislocProcessor(AnalyticalSourceProcessor):
-
-    @staticmethod
-    def process(sources, coords, nthreads=0):
-        result = {
-            'processor_profile': dict(),
-            'displacement.n': num.zeros((coords.shape[0])),
-            'displacement.e': num.zeros((coords.shape[0])),
-            'displacement.d': num.zeros((coords.shape[0])),
-        }
-
-        src_nu = set(src.poisson for src in sources)
-
-        for nu in src_nu:
-            src_arr = num.vstack([src.disloc_source() for src in sources
-                                  if src.poisson == nu])
-            res = disloc_ext.disloc(src_arr, coords, nu, nthreads)
-            result['displacement.e'] += res[:, 0]
-            result['displacement.n'] += res[:, 1]
-            result['displacement.d'] += -res[:, 2]
-
-        return result
-
-
 __all__ = [
-    'AnalyticalSourceProcessor',
-    'DislocProcessor',
     'AnalyticalSource',
     'AnalyticalRectangularSource',
     'OkadaSource',
