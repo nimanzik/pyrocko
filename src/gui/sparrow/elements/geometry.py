@@ -230,8 +230,9 @@ class GeometryElement(Element):
         loaded_geometry = load(filename=path)
         props = loaded_geometry.properties.get_col_names(sub_headers=False)
 
-        if props and self._state.display_parameter not in props:
-            self._state.display_parameter = props[0]
+        if props:
+            if self._state.display_parameter not in props:
+                self._state.display_parameter = props[0]
         else:
             raise ValueError(
                 'Imported geometry contains no property to be displayed!')
@@ -276,7 +277,8 @@ class GeometryElement(Element):
                 out = values[:, ref_idx_max]
             else:
                 out = values[:, ref_idx_min:ref_idx_max].sum(1)
-
+        else:
+            out = values.ravel()
         return out
 
     def update(self, *args):
