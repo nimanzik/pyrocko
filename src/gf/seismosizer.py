@@ -2237,10 +2237,57 @@ class RectangularSource(SourceWithDerivedMagnitude):
         return super(RectangularSource, cls).from_pyrocko_event(ev, **d)
 
 
-class PseudoDynamicRupture(RectangularSource):
+class PseudoDynamicRupture(SourceWithDerivedMagnitude):
     '''
     Merged Eikonal and Okada Source for quasi-dynamic rupture modeling
     '''
+
+    discretized_source_class = meta.DiscretizedMTSource
+
+    magnitude = Float.T(
+        optional=True,
+        help='moment magnitude Mw as in [Hanks and Kanamori, 1979]')
+
+    strike = Float.T(
+        default=0.0,
+        help='strike direction in [deg], measured clockwise from north')
+
+    dip = Float.T(
+        default=90.0,
+        help='dip angle in [deg], measured downward from horizontal')
+
+    rake = Float.T(
+        default=0.0,
+        help='rake angle in [deg], '
+             'measured counter-clockwise from right-horizontal '
+             'in on-plane view')
+
+    length = Float.T(
+        default=0.,
+        help='length of rectangular source area [m]')
+
+    width = Float.T(
+        default=0.,
+        help='width of rectangular source area [m]')
+
+    anchor = StringChoice.T(
+        choices=['top', 'top_left', 'top_right', 'center', 'bottom',
+                 'bottom_left', 'bottom_right'],
+        default='center',
+        optional=True,
+        help='Anchor point for positioning the plane, can be: top, center or'
+             'bottom and also top_left, top_right,bottom_left,'
+             'bottom_right, center_left and center right')
+
+    nucleation_x = Float.T(
+        optional=True,
+        help='horizontal position of rupture nucleation in normalized fault '
+             'plane coordinates (-1 = left edge, +1 = right edge)')
+
+    nucleation_y = Float.T(
+        optional=True,
+        help='down-dip position of rupture nucleation in normalized fault '
+             'plane coordinates (-1 = upper edge, +1 = lower edge)')
 
     gamma = Float.T(
         default=0.8,
@@ -2276,7 +2323,147 @@ class PseudoDynamicRupture(RectangularSource):
         dtype=num.float,
         shape=(None,))
 
-    def _discretize_points(self, store, factor=1., *args, **kwargs):
+    eikonal_factor = Int.T(
+        optional=True,
+        default=1,
+        help='Sub-source eikonal factor, a smaller eikonal factor will'
+             ' increase the accuracy of rupture front calculation but'
+             ' increases also the computation time.')
+
+    decimation_factor = Int.T(
+        optional=True,
+        default=1,
+        help='Sub-source decimation factor, a larger decimation will'
+             ' make the result inaccurate but shorten the necessary'
+             ' computation time (use for testing puposes only).')
+
+    def __init__(self, **kwargs):
+        if 'moment' in kwargs:
+            mom = kwargs.pop('moment')
+            if 'magnitude' not in kwargs:
+                kwargs['magnitude'] = float(pmt.moment_to_magnitude(mom))
+
+        SourceWithDerivedMagnitude.__init__(self, **kwargs)
+
+    def base_key(self):
+        return SourceWithDerivedMagnitude.base_key(self) + (
+            self.magnitude,
+            self.strike,
+            self.dip,
+            self.rake,
+            self.length,
+            self.width,
+            self.nucleation_x,
+            self.nucleation_y,
+            self.decimation_factor,
+            self.anchor)
+
+    def check_conflicts(self):
+        if self.magnitude is not None and self.slip is not None:
+            raise DerivedMagnitudeError(
+                'magnitude and slip are both defined')
+
+    def get_magnitude(self, store=None, target=None):
+        self.check_conflicts()
+        if self.magnitude is not None:
+            return self.magnitude
+
+        elif self.slip is not None:
+            if None in (store, target):
+                raise DerivedMagnitudeError(
+                    'magnitude for a rectangular source with slip defined '
+                    'can only be derived when earth model and target '
+                    'interpolation method are available')
+
+            amplitudes = self._discretize(store, target)[2]
+            return float(pmt.moment_to_magnitude(num.sum(amplitudes)))
+
+        else:
+            return float(pmt.moment_to_magnitude(1.0))
+
+    def get_factor(self):
+        return 1.0
+
+    def outline(self, cs='xyz'):
+        points = outline_rect_source(self.strike, self.dip, self.length,
+                                     self.width, self.anchor)
+
+        points[:, 0] += self.north_shift
+        points[:, 1] += self.east_shift
+        points[:, 2] += self.depth
+        if cs == 'xyz':
+            return points
+        elif cs == 'xy':
+            return points[:, :2]
+        elif cs in ('latlon', 'lonlat', 'latlondepth'):
+            latlon = ne_to_latlon(
+                self.lat, self.lon, points[:, 0], points[:, 1])
+
+            latlon = num.array(latlon).T
+            if cs == 'latlon':
+                return latlon
+            elif cs == 'lonlat':
+                return latlon[:, ::-1]
+            else:
+                return num.concatenate(
+                    (latlon, points[:, 2].reshape((len(points), 1))),
+                    axis=1)
+
+    def points_on_source(self, cs='xyz', **kwargs):
+
+        points = points_on_rect_source(
+            self.strike, self.dip, self.length, self.width,
+            self.anchor, **kwargs)
+
+        points[:, 0] += self.north_shift
+        points[:, 1] += self.east_shift
+        points[:, 2] += self.depth
+        if cs == 'xyz':
+            return points
+        elif cs == 'xy':
+            return points[:, :2]
+        elif cs in ('latlon', 'lonlat', 'latlondepth'):
+            latlon = ne_to_latlon(
+                self.lat, self.lon, points[:, 0], points[:, 1])
+
+            latlon = num.array(latlon).T
+            if cs == 'latlon':
+                return latlon
+            elif cs == 'lonlat':
+                return latlon[:, ::-1]
+            else:
+                return num.concatenate(
+                    (latlon, points[:, 2].reshape((len(points), 1))),
+                    axis=1)
+
+    def pyrocko_moment_tensor(self, store=None, target=None):
+        return pmt.MomentTensor(
+            strike=self.strike,
+            dip=self.dip,
+            rake=self.rake,
+            scalar_moment=self.get_moment(store, target))
+
+    def pyrocko_event(self, store=None, target=None, **kwargs):
+        return SourceWithDerivedMagnitude.pyrocko_event(
+            self, store, target,
+            **kwargs)
+
+    @classmethod
+    def from_pyrocko_event(cls, ev, **kwargs):
+        d = {}
+        mt = ev.moment_tensor
+        if mt:
+            (strike, dip, rake), _ = mt.both_strike_dip_rake()
+            d.update(
+                strike=float(strike),
+                dip=float(dip),
+                rake=float(rake),
+                magnitude=float(mt.moment_magnitude()))
+
+        d.update(kwargs)
+        return super(PseudoDynamicRupture, cls).from_pyrocko_event(ev, **d)
+
+    def _discretize_points(self, store, *args, **kwargs):
         '''
         Discretize source plane with equal vertical and horizontal spacing
 
@@ -2285,10 +2472,6 @@ class PseudoDynamicRupture(RectangularSource):
         :param store: Greens function database (needs to cover whole region of
             of the source)
         :type store: :py:class:`pyrocko.gf.store.Store`
-        :param factor: Measure, how fine the discretization is performed.
-            factor==1 means, discretization spacing is defined by deltat or
-            deltas from store
-        :type factor: optional, float
 
         :return: Number of points in strike and dip direction, coordinates
             (latlondepth) and coordinates (xy on fault) for discrete points
@@ -2297,7 +2480,7 @@ class PseudoDynamicRupture(RectangularSource):
 
         vs_min = store.config.earthmodel_1d.min(get='vs')
 
-        delta = 1. / factor * num.min([
+        delta = self.eikonal_factor * num.min([
             num.min(store.config.deltat * vs_min / 2.),
             num.min(store.config.deltas)])
         nx = int(num.floor(self.length / delta)) + 1
@@ -2361,7 +2544,6 @@ class PseudoDynamicRupture(RectangularSource):
     def discretize_time(
             self,
             store,
-            factor=2.,
             target=None,
             times=None,
             *args,
@@ -2373,10 +2555,6 @@ class PseudoDynamicRupture(RectangularSource):
         :param store: Greens function database (needs to cover whole region of
             of the source)
         :type store: :py:class:`pyrocko.gf.store.Store`
-        :param factor: Measure, how fine the discretization is performed.
-            factor==1 means, discretization spacing is defined by deltat or
-            deltas from store
-        :type factor: optional, float
         :param target: Target information
         :type target: optional, :py:class:`pyrocko.gf.target.Target`
         :param times: Array, containing zeros, where rupture is starting and
@@ -2395,7 +2573,6 @@ class PseudoDynamicRupture(RectangularSource):
 
         nx, ny, delta, points, points_xy = self._discretize_points(
             store,
-            factor=factor,
             cs='xyz')
 
         vr = self._discretize_vr(
@@ -2455,7 +2632,6 @@ class PseudoDynamicRupture(RectangularSource):
             self,
             store,
             interpolation='multilinear',
-            factor=None,
             grid_shape=(),
             *args,
             **kwargs):
@@ -2472,24 +2648,13 @@ class PseudoDynamicRupture(RectangularSource):
         :param interpolation: Kind of interpolation used. Choice between
             'multilinear' and 'nearest_neighbor'
         :type interpolation: optional, str
-        :param factor: Measure, how fine the discretization is performed.
-            factor==1 means, discretization spacing is defined by deltat or
-            deltas from store. Either factor or grid_shape should be set.
-        :type factor: optional, float
         :param grid_shape: Wished sub fault patch grid size (nlength, nwidth).
             Either factor or grid_shape should be set.
         :type grid_shape: optional, tuple of int
         '''
 
-        if factor and grid_shape:
-            raise ValueError(
-                'Please give either a factor or the fault patch grid shape.')
-
-        if not factor:
-            factor = 1.
-
         _, points_xy, vr, times = self.discretize_time(
-            store=store, factor=factor, *args, **kwargs)
+            store=store, *args, **kwargs)
 
         anch_x, anch_y = map_anchor[self.anchor]
         points_xy[:, 0] = (points_xy[:, 0] - anch_x) * self.length * 0.5
@@ -2549,8 +2714,8 @@ class PseudoDynamicRupture(RectangularSource):
             if grid_shape:
                 self.nx, self.ny = grid_shape
             else:
-                self.nx = int(num.floor(nx / factor))
-                self.ny = int(num.floor(ny / factor))
+                self.nx = int(num.floor(nx / self.decimation_factor))
+                self.ny = int(num.floor(ny / self.decimation_factor))
 
         source_disc, source_points = src.discretize(self.nx, self.ny)
         cfg_args = [
@@ -2742,37 +2907,20 @@ class PseudoDynamicRupture(RectangularSource):
             [num.arange(i * 3, i * 3 + 3, 1) for i in indices_source]
             ).flatten()
 
-        if self.coef_mat is not None:
-            if self.tractions.shape == tuple((self.coef_mat.shape[0], )):
-                self.tractions.reshape(-1, 1)
-            elif self.tractions.shape != tuple((self.coef_mat.shape[0], 1)):
-                raise TypeError(
-                    'coefficient matrix does not have expected shape. '
-                    'Following shape is '
-                    'needed: %i, %i' % self.tractions.shape)
+        if self.coef_mat is None:
+            self.calc_coef_mat()
 
-            disloc_est[indices_disl] = DislocationInverter.get_disloc_lsq(
-                stress_field=self.tractions[indices_disl],
-                coef_mat=self.coef_mat[indices_disl, :][:, indices_disl],
-                **kwargs).reshape(-1,)
-
-        elif self.patches is not None:
-            if self.tractions.shape == tuple((len(self.patches) * 3, )):
-                self.tractions.reshape(-1, 1)
-            elif self.tractions.shape != tuple((len(self.patches) * 3, 1)):
-                raise TypeError(
-                    'stress does not have expected shape. Following shape is '
-                    'needed: %i, %i' % self.tractions.shape)
-
-            disloc_est[indices_disl] = DislocationInverter.get_disloc_lsq(
-                stress_field=self.tractions[indices_disl],
-                source_list=[self.patches[i] for i in indices_source],
-                **kwargs).reshape(-1,)
-
-
-        elif self.coef_mat is None and self.patches is None:
+        if self.tractions.shape == tuple((self.coef_mat.shape[0], )):
+            self.tractions.reshape(-1, 1)
+        elif self.tractions.shape != tuple((self.coef_mat.shape[0], 1)):
             raise TypeError(
-                'Coefficient matrix or source list needs to be defined.')
+                'The traction vector is of invalid shape.'
+                'The shape needed is: %i, 1' % self.coef_mat.shape[0])
+
+        disloc_est[indices_disl] = DislocationInverter.get_disloc_lsq(
+            stress_field=self.tractions[indices_disl],
+            coef_mat=self.coef_mat[indices_disl, :][:, indices_disl],
+            **kwargs).reshape(-1,)
 
         return disloc_est
 

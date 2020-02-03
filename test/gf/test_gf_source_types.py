@@ -50,52 +50,39 @@ class GFSourceTypesTestCase(unittest.TestCase):
     def test_pseudo_dynamic_rupture(self):
         store_id = 'crust2_dd'
 
-        if not os.path.exists(store_id):
+        if not os.path.exists(os.path.join('/home/mmetz/src/gf_stores', store_id)):
             gf.ws.download_gf_store(site='kinherd', store_id=store_id)
 
-        engine = gf.LocalEngine(store_superdirs=['.'])
+        engine = gf.LocalEngine(store_superdirs=['.', '/home/mmetz/src/gf_stores'])
         store = engine.get_store(store_id)
 
         pdr = gf.PseudoDynamicRupture(
             length=20000., width=10000., depth=2000.,
-            anchor='top', gamma=0.8, dip=90., strike=0.)
+            anchor='top', gamma=0.8, dip=90., strike=0.,
+            nucleation_x=0., nucleation_y=0.,
+            decimation_factor=10, eikonal_factor=0.5)
 
-        points, _, vr, times = pdr.discretize_time(
-            store,
-            factor=2.,
-            nucleation_x=0.,
-            nucleation_y=0.)
+        points, _, vr, times = pdr.discretize_time(store)
         assert times.shape == vr.shape
         assert points.shape[0] == times.shape[0] * times.shape[1]
 
-        _, source_disc, times_interp = pdr.discretize_okada(
+        pdr.discretize_patches(
             store=store,
-            factor=10.,
             interpolation='nearest_neighbor',
             nucleation_x=0.,
             nucleation_y=0.)
-        assert len(source_disc) == (
-            times_interp.shape[0] * times_interp.shape[1])
 
-        stress_field = num.zeros((len(source_disc) * 3, 1))
+        stress_field = num.zeros((len(pdr.patches) * 3, 1))
         stress_field[2::3] = -0.5e6
+        pdr.tractions = stress_field
 
-        time = num.max(times_interp) * 0.5
+        time = num.max(pdr.get_patch_attribute('time')) * 0.5
 
-        disloc_est = pdr.get_okada_slip(
-            stress_field=stress_field,
-            times=times_interp,
-            source_list=source_disc,
-            t=time)
+        disloc_est = pdr.get_okada_slip(t=time)
 
-        coef_mat = DislocationInverter.get_coef_mat(source_disc)
+        coef_mat = DislocationInverter.get_coef_mat(pdr.patches)
 
-        disloc_est2 = pdr.get_okada_slip(
-            stress_field=stress_field,
-            times=times_interp,
-            coef_mat=coef_mat,
-            t=time)
-        assert (disloc_est2 == disloc_est).all()
+        assert (coef_mat == pdr.coef_mat).all()
 
         if show_plot:
             level = num.arange(0., 15., 1.5)
@@ -115,9 +102,9 @@ class GFSourceTypesTestCase(unittest.TestCase):
             plt.show()
 
             x_val = num.array([
-                src.northing for src in source_disc])[:times_interp.shape[1]]
+                src.northing for src in pdr.patches])[:pdr.nx]
             y_val = num.array([
-                src.depth for src in source_disc])[::times_interp.shape[1]]
+                src.depth for src in pdr.patches])[::pdr.nx]
 
             plt.gcf().add_subplot(1, 1, 1, aspect=1.0)
             im = plt.imshow(
@@ -127,7 +114,7 @@ class GFSourceTypesTestCase(unittest.TestCase):
                     num.max(y_val), num.min(y_val)])
             plt.contourf(
                 x_val, y_val,
-                times_interp,
+                pdr.get_patch_attribute('time').reshape(pdr.ny, pdr.nx),
                 level,
                 cmap='gray', alpha=0.5)
             plt.colorbar(im, label='Opening [m] after %.2f s' % time)
