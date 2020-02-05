@@ -2483,6 +2483,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         delta = self.eikonal_factor * num.min([
             num.min(store.config.deltat * vs_min / 2.),
             num.min(store.config.deltas)])
+
         nx = int(num.floor(self.length / delta)) + 1
 
         if self.length == self.width:
