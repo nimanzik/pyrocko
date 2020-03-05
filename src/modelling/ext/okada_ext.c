@@ -814,20 +814,20 @@ void rot_u(
 
 
 static okada_error_t dc3d_flexi(
-        double alpha,
-        double nr,
+        double alpha,  // (lambda + mu) / (lambda + 2. * mu)
+        double nr,  // receiver coords
         double er,
         double dr,
-        double ns,
+        double ns,  // source coords
         double es,
         double ds,
-        double strike,
+        double strike,  // source params
         double dip,
-        double al1,
+        double al1,  // length
         double al2,
-        double aw1,
+        double aw1,  // width
         double aw2,
-        double disl1,
+        double disl1,  // dislocation of the source in space
         double disl2,
         double disl3,
         double *u) {
@@ -935,21 +935,18 @@ int halfspace_check(
     for (isrc=0; isrc<nsources; isrc++) {
         src_idx = isrc * 9;
         if ((source_patches[src_idx + 2] - sin(source_patches[src_idx + 4]*D2R) * source_patches[src_idx + 7]) < 0 || (source_patches[src_idx + 2] - sin(source_patches[src_idx + 4]*D2R) * source_patches[src_idx + 8]) < 0 ) {
-            sprintf(msg, "Source %g, %g, %g (N, E, D) is (partially) above z=0.\nCalculation was terminated. Please check.", source_patches[src_idx], source_patches[src_idx + 1], source_patches[src_idx + 2]);
-            PyErr_SetString(PyExc_ValueError, msg);
+            PyErr_Format(PyExc_ValueError, "Source %g, %g, %g (N, E, D) is (partially) above z=0.\nCalculation was terminated. Please check.", source_patches[src_idx], source_patches[src_idx + 1], source_patches[src_idx + 2]);
             return 0;
         }
         if (source_patches[src_idx + 2] < 0) {
-            sprintf(msg, "Source %g, %g, %g (N, E, D) is (partially) above z=0.\nCalculation was terminated. Please check.", source_patches[src_idx], source_patches[src_idx + 1], source_patches[src_idx + 2]);
-            PyErr_SetString(PyExc_ValueError, msg);
+            PyErr_Format(PyExc_ValueError, "Source %g, %g, %g (N, E, D) is (partially) above z=0.\nCalculation was terminated. Please check.", source_patches[src_idx], source_patches[src_idx + 1], source_patches[src_idx + 2]);
             return 0;
         }
     }
 
     for (irec=0; irec<nreceivers; irec++) {
         if (receiver_coords[irec * 3 + 2] < 0) {
-            sprintf(msg, "Receiver %g, %g, %g (N, E, D) is above z=0.\nCalculation was terminated.  Please check!", receiver_coords[irec * 3], receiver_coords[irec * 3 + 1], receiver_coords[irec * 3 + 2]);
-            PyErr_SetString(PyExc_ValueError, msg);
+            PyErr_Format(PyExc_ValueError, "Receiver %g, %g, %g (N, E, D) is above z=0.\nCalculation was terminated.  Please check!", receiver_coords[irec * 3], receiver_coords[irec * 3 + 1], receiver_coords[irec * 3 + 2]);
             return 0;
         }
     }
@@ -1008,19 +1005,24 @@ static PyObject* w_dc3d_flexi(
 
     #if defined(_OPENMP)
         Py_BEGIN_ALLOW_THREADS
-        if (nthreads == 0)
+        if (nthreads <= 0)
             nthreads = omp_get_num_procs();
         #pragma omp parallel\
             shared(nrec, nsources, lambda, mu, receiver_coords, source_patches, source_disl, output)\
             private(uout, irec, isource, i, alpha)\
             num_threads(nthreads)
         {
-        #pragma omp for schedule(static) nowait
+        #pragma omp for schedule(static)
     #endif
         for (irec=0; irec<nrec; irec++) {
             for (isource=0; isource<nsources; isource++) {
                 alpha = (lambda + mu) / (lambda + 2. * mu);
-                dc3d_flexi(alpha, receiver_coords[irec*3], receiver_coords[irec*3+1], receiver_coords[irec*3+2], source_patches[isource*9], source_patches[isource*9+1], source_patches[isource*9+2], source_patches[isource*9+3], source_patches[isource*9+4], source_patches[isource*9+5], source_patches[isource*9+6], source_patches[isource*9+7], source_patches[isource*9+8], source_disl[isource*3], source_disl[isource*3+1], source_disl[isource*3+2], uout);
+                dc3d_flexi(
+                    alpha,
+                    receiver_coords[irec*3], receiver_coords[irec*3+1], receiver_coords[irec*3+2],
+                    source_patches[isource*9], source_patches[isource*9+1], source_patches[isource*9+2], source_patches[isource*9+3], source_patches[isource*9+4],
+                    source_patches[isource*9+5], source_patches[isource*9+6], source_patches[isource*9+7], source_patches[isource*9+8],
+                    source_disl[isource*3], source_disl[isource*3+1], source_disl[isource*3+2], uout);
 
                 for (i=0; i<12; i++) {
                     output[irec*12+i] += uout[i];

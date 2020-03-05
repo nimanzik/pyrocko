@@ -2309,11 +2309,10 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
     tractions = Array.T(
         optional=True,
-        help=
-            'Array of traction vectors [Pa] per source patch (size = nx*ny*3)'
-            'source patch (order: ['
-            'src1 dstress_Strike, src1 dstress_Dip, src1 dstress_Tensile,'
-            'src2 dstress_Strike, ...])',
+        help='Array of traction vectors [Pa] per source patch (size = nx*ny*3)'
+             ' source patch (order: ['
+             ' src1 dstress_Strike, src1 dstress_Dip, src1 dstress_Tensile,'
+             ' src2 dstress_Strike, ...])',
         dtype=num.float,
         shape=(None,))
 
@@ -2598,7 +2597,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             nucl_indices = num.array([
                 num.where(
                     dist_points[:, icol] == num.min(dist_points[:, icol],
-                        axis=0)
+                    axis=0)
                 )[0] for icol in range(nucl_x.shape[0])]).reshape(-1)
 
             if nucl_times is None:
@@ -2620,7 +2619,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             logger.warn(
                 'Given times are not in right shape. Therefore standard time '
                 'array is used.')
-
 
         eikonal_ext.eikonal_solver_fmm_cartesian(
                         vr,
@@ -2740,8 +2738,8 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                     source_points[:, 0].reshape(-1, 1),
                     source_points[:, 1].reshape(-1, 1))))
         else:
-            times_interp = times.T.flatten()
-            vr_interp = vr.T.flatten()
+            times_interp = times.T.ravel()
+            vr_interp = vr.T.ravel()
 
         for isrc in range(len(source_disc)):
             source_disc[isrc].vr = vr_interp[isrc]
@@ -2788,10 +2786,10 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         slip_shear = num.linalg.norm(
             num.vstack((
-                delta_slip[::3, :].flatten(),
-                delta_slip[1::3, :].flatten())),
+                delta_slip[::3, :].ravel(),
+                delta_slip[1::3, :].ravel())),
             axis=0)
-        slip_norm = delta_slip[2::3, :].flatten()
+        slip_norm = delta_slip[2::3, :].ravel()
 
         points = num.array([patch.source_patch()[:3] for patch in self.patches])
         points = num.tile(points, nt).reshape(-1, 3)

@@ -3,14 +3,16 @@ import numpy as num
 from pyrocko.modelling import OkadaSource, DislocationInverter
 from pyrocko.plot import dislocation as displt
 
-km = 1000.
+km = 1e3
 
 # Set Source parameters
 ref_north, ref_east, ref_depth = 0. * km, 0. * km, 100. * km
 
 length_total = 50. * km
 width_total = 15. * km
-nlength, nwidth = 20, 16
+
+nlength = 20  # number of subpatches
+nwidth = 16
 npoints = nlength * nwidth
 
 al1 = -length_total / 2.
@@ -54,4 +56,3 @@ displt.plot(
     receiver_coords,
     titles=['$u_{strike}$', '$u_{dip}$', '$u_{opening}$', '$u_{total}$'],
     cmap='viridis_r')
-
