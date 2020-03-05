@@ -133,7 +133,7 @@ class OkadaSource(AnalyticalRectangularSource):
         with the shear modulus mu
         '''
 
-        return (2 * self.poisson * self.shearmod) / (1 - 2 * self.poisson)
+        return (2. * self.poisson * self.shearmod) / (1. - 2*self.poisson)
 
     @property
     def seismic_moment(self):
@@ -159,7 +159,7 @@ class OkadaSource(AnalyticalRectangularSource):
         if self.shearmod:
             mu = self.shearmod
         elif self.poisson:
-            self.shearmod = (8. * (1 + self.poisson)) / (1 - 2. * self.poisson)
+            self.shearmod = (8. * (1 + self.poisson)) / (1. - 2 * self.poisson)
             mu = self.shearmod
         else:
             raise ValueError(
@@ -167,9 +167,9 @@ class OkadaSource(AnalyticalRectangularSource):
 
         disl = 0.
         if self.slip:
-            disl = num.sqrt(num.sum([disl**2, self.slip**2]))
+            disl = (disl**2 + self.slip**2)**.5
         if self.opening:
-            disl = num.sqrt(num.sum([disl**2, self.opening**2]))
+            disl = (disl**2 + self.opening**2)**.5
 
         return mu * self.area * disl
 
@@ -178,7 +178,6 @@ class OkadaSource(AnalyticalRectangularSource):
         '''
         Moment magnitude from Seismic moment
 
-        Copied from Kite. Returns the moment magnitude
         We assume :math:`M_\\mathrm{w} = {\\frac{2}{3}}\\log_{10}(M_0) - 10.7`
 
         :returns: Moment magnitude
@@ -194,20 +193,16 @@ class OkadaSource(AnalyticalRectangularSource):
         :return: array of the source data as input for okada_ext.okada
         :rtype: :py:class:`numpy.ndarray`, ``(1, 9)``
         '''
-
-        source_patch = num.empty(9)
-
-        source_patch[0] = self.northing
-        source_patch[1] = self.easting
-        source_patch[2] = self.depth
-        source_patch[3] = self.strike
-        source_patch[4] = self.dip
-        source_patch[5] = self.al1
-        source_patch[6] = self.al2
-        source_patch[7] = self.aw1
-        source_patch[8] = self.aw2
-
-        return source_patch
+        return num.array([
+            self.northing,
+            self.easting,
+            self.depth,
+            self.strike,
+            self.dip,
+            self.al1,
+            self.al2,
+            self.aw1,
+            self.aw2])
 
     def source_disloc(self):
         '''
@@ -217,33 +212,19 @@ class OkadaSource(AnalyticalRectangularSource):
         okada_ext.okada
         :rtype: :py:class:`numpy.ndarray`, ``(1, 3)``
         '''
-
-        source_disl = num.empty(3)
-
-        source_disl[0] = num.cos(self.rake * d2r) * self.slip
-        source_disl[1] = num.sin(self.rake * d2r) * self.slip
-        source_disl[2] = self.opening
-
-        return source_disl
-
-    def get_parameters_array(self):
-        return num.array([self.__getattribute__(p) for p in self.parameters])
-
-    def set_parameters_array(self, parameter_arr):
-        if parameter_arr.size != len(self.parameters):
-            raise AttributeError('Invalid number of parameters, %s has %d'
-                                 ' parameters'
-                                 % self.__name__, len(self.parameters))
-        for ip, param in enumerate(self.parameters):
-            self.__setattr__(param, parameter_arr[ip])
+        return num.array([
+            num.cos(self.rake * d2r) * self.slip,
+            num.sin(self.rake * d2r) * self.slip,
+            self.opening])
 
     def discretize(self, nlength, nwidth, *args, **kwargs):
         '''
-        Discretize the given fault by nlength * nwidth fault patches
+        Discretize the given fault by ``nlength * nwidth`` fault patches
 
-        Discretizing the fault into several sub faults. Nlength is number of
-        points in strike direction, nwidth in down dip direction along the
-        fault. Fault orientation, slip and elastic parameters are kept.
+        Discretizing the fault into several sub faults. ``nlength`` is
+        number of points in strike direction, ``nwidth`` in down dip direction
+        along the fault. Fault orientation, slip and elastic parameters are
+        kept.
 
         :param nlength: Number of discrete points in faults strike direction
         :type nlength: int
@@ -253,6 +234,8 @@ class OkadaSource(AnalyticalRectangularSource):
         :return: Discrete fault patches
         :rtype: list of :py:class:`pyrocko.modelling.OkadaSource` objects
         '''
+        assert nlength > 0
+        assert nwidth > 0
 
         il = num.tile(num.arange(0, nlength, 1), nwidth)
         iw = num.repeat(num.arange(0, nwidth, 1), nlength)
@@ -266,8 +249,8 @@ class OkadaSource(AnalyticalRectangularSource):
         aw2 = patch_width / 2.
 
         source_points = num.zeros((nlength * nwidth, 3))
-        source_points[:, 0] = il * patch_length + num.abs(al1)
-        source_points[:, 1] = iw * patch_width + num.abs(aw1)
+        source_points[:, 0] = il * patch_length + patch_length / 2.
+        source_points[:, 1] = iw * patch_width + patch_width / 2.
 
         source_points[:, 0] += self.al1
         source_points[:, 1] -= self.aw2
@@ -328,19 +311,17 @@ class DislocationInverter(object):
             src.source_patch() for src in source_patches_list])
         receiver_coords = source_patches[:, :3].copy()
 
-        npoints = len(source_patches_list)
+        nsources = len(source_patches_list)
 
         if pure_shear:
             n_eq = 2
         else:
             n_eq = 3
 
-        coefmat = num.zeros((npoints * 3, npoints * 3))
+        coefmat = num.zeros((nsources * 3, nsources * 3))
 
         def ned2sdn_rotmat(strike, dip):
-            rotmat = mt.euler_to_matrix(
-                (dip + 180.) * d2r, strike * d2r, 0.).A
-            return rotmat
+            return mt.euler_to_matrix((dip + 180.)*d2r, strike*d2r, 0.).A
 
         lambda_mean = num.mean([src.lamb for src in source_patches_list])
         shearmod_mean = num.mean([src.shearmod for src in source_patches_list])
@@ -396,20 +377,20 @@ class DislocationInverter(object):
                     source_patches_list[isource].strike,
                     source_patches_list[isource].dip)
 
-                stress_sdn = num.array([
-                    num.dot(num.dot(
-                        rotmat, stress.reshape(3, 3)), rotmat.T).flatten()
-                    for stress in stress_ned])
+                stress_sdn = num.einsum(
+                    'ij,...jk,lk->...il',
+                    rotmat, stress_ned.reshape(nsources, 3, 3), rotmat)
 
-                coefmat[0::3, isource * 3 + idisl] = -stress_sdn[
-                    :, 2].flatten() / unit_disl
-                coefmat[1::3, isource * 3 + idisl] = -stress_sdn[
-                    :, 5].flatten() / unit_disl
+                stress_sdn = stress_sdn.reshape(nsources, 9)
+
+                coefmat[0::3, isource * 3 + idisl] = -stress_sdn[:, 2].ravel()
+                coefmat[1::3, isource * 3 + idisl] = -stress_sdn[:, 5].ravel()
+
                 if n_eq == 3:
-                    coefmat[2::3, isource * 3 + idisl] = -stress_sdn[
-                        :, 8].flatten() / unit_disl
+                    coefmat[2::3, isource * 3 + idisl] = \
+                        -stress_sdn[:, 8].ravel()
 
-        return coefmat
+        return coefmat / unit_disl
 
     @staticmethod
     def get_coef_mat_slow(source_patches_list, pure_shear=False):
@@ -472,7 +453,6 @@ class DislocationInverter(object):
                 'opening': unit_disl,
                 'rake': 0.}
         }
-
         for idisl, case_type in enumerate([
                 'strikeslip', 'dipslip', 'tensileslip'][:n_eq]):
             case = disl_cases[case_type]
@@ -573,22 +553,21 @@ class DislocationInverter(object):
 
         idx = num.arange(0, coef_mat.shape[0], 1)
         if pure_shear:
-            idx = idx[
-                (idx + 1) / 3. != num.floor((idx + 1) / 3.)]
+            idx = idx[idx % 3 != 2]
 
         coef_mat_in = coef_mat[idx, :][:, idx]
         disloc_est = num.zeros(coef_mat.shape[0])
 
         if stress_field.ndim == 2:
-            stress_field = stress_field.reshape(-1,)
+            stress_field = stress_field.ravel()
 
-        if not (coef_mat_in is None):
+        if coef_mat_in is not None:
             if stress_field[idx].shape[0] == coef_mat_in.shape[0]:
                 disloc_est[idx] = num.linalg.multi_dot([num.linalg.inv(
                     num.dot(coef_mat_in.T, coef_mat_in)),
                     coef_mat_in.T,
                     stress_field[idx]])
-                return disloc_est.reshape(-1,)
+                return disloc_est.ravel()
 
 
 __all__ = [
