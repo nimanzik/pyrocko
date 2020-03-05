@@ -6,6 +6,9 @@ import unittest
 from pyrocko import util
 from pyrocko.modelling import DislocationInverter, okada_ext, OkadaSource
 
+from ..common import Benchmark
+
+benchmark = Benchmark()
 
 d2r = num.pi / 180.
 km = 1000.
@@ -114,13 +117,13 @@ class OkadaTestCase(unittest.TestCase):
             assert num.abs(u[0][i]) - num.abs(u_check[i]) < 1e-5
             assert num.all(vals > 0.) or num.all(vals < 0.)
 
-    def test_okada_benchmark(self):
-        nlength = 100
+    def test_okada_inv_benchmark(self):
+        nlength = 50
         nwidth = 10
 
-        al1 = -80.
+        al1 = -40.
         al2 = -al1
-        aw1 = -30.
+        aw1 = -20.
         aw2 = -aw1
 
         strike = 0.
@@ -137,6 +140,12 @@ class OkadaTestCase(unittest.TestCase):
 
         source_disc, _ = source.discretize(nlength, nwidth)
 
+        @benchmark.labeled('okada_inv')
+        def calc():
+            DislocationInverter.get_coef_mat(source_disc)
+
+        calc()
+        print(benchmark)
 
     def test_okada_discretize(self):
         nlength = 100
@@ -261,16 +270,13 @@ class OkadaTestCase(unittest.TestCase):
 
         # Function to test the computed GF
         dstress = -1.5e6
-        stress_comp = 1.
+        stress_comp = 1
 
-        stress = num.zeros((nlength * nwidth * n_eq, 1))
+        stress = num.full(nlength * nwidth * n_eq, dstress)
         for iw in range(nwidth):
             for il in range(nlength):
                 idx = iw * nlength + il
-
-                if (il > 8 and il < 16) and (iw > 2 and iw < 12):
-                    stress[idx * n_eq + stress_comp] = dstress
-                elif (il > 2 and il < 10) and (iw > 2 and iw < 12):
+                if (il > 2 and il < 10) and (iw > 2 and iw < 12):
                     stress[idx * n_eq + stress_comp] = dstress / 4.
 
         disloc_est = DislocationInverter.get_disloc_lsq(
