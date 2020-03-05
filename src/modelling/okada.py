@@ -283,7 +283,7 @@ class DislocationInverter(object):
     '''
 
     @staticmethod
-    def get_coef_mat(source_patches_list, pure_shear=False):
+    def get_coef_mat(source_patches_list, pure_shear=False, nthreads=0):
         '''
         Build coefficient matrix for given source_patches
 
@@ -303,8 +303,7 @@ class DislocationInverter(object):
 
         :return: coefficient matrix for all sources
         :rtype: :py:class:`numpy.ndarray`,
-            ``(source_patches_list.shape[0] * 3,
-            source_patches.shape[] * 3(2))``
+            ``(len(source_patches_list) * 3, len(source_patches_list) * 3)``
         '''
 
         source_patches = num.array([
@@ -325,7 +324,7 @@ class DislocationInverter(object):
             return mt.euler_to_matrix((dip + 180.)*d2r, strike*d2r, 0.).A
 
         lambda_mean = num.mean([src.lamb for src in source_patches_list])
-        shearmod_mean = num.mean([src.shearmod for src in source_patches_list])
+        mu_mean = num.mean([src.shearmod for src in source_patches_list])
 
         unit_disl = 1.
         disl_cases = {
@@ -343,6 +342,10 @@ class DislocationInverter(object):
                 'rake': 0.}
         }
 
+        diag_ind = (0, 4, 8)
+        kron = num.zeros((npoints, 9))
+        kron[:, diag_ind] = 1.
+
         for idisl, case_type in enumerate([
                 'strikeslip', 'dipslip', 'tensileslip'][:n_eq]):
             case = disl_cases[case_type]
@@ -357,22 +360,18 @@ class DislocationInverter(object):
                     source_disl[num.newaxis, :],
                     receiver_coords,
                     lambda_mean,
-                    shearmod_mean,
-                    0)
+                    mu_mean,
+                    nthreads)
 
                 eps = \
                     0.5 * (
                         results[:, 3:] +
-                        results[:, [3, 6, 9, 4, 7, 10, 5, 8, 11]])
+                        results[:, (3, 6, 9, 4, 7, 10, 5, 8, 11)])
 
-                diag_ind = [0, 4, 8]
                 dilatation = num.sum(eps[:, diag_ind], axis=1)[:, num.newaxis]
-                lamb = lambda_mean
-                mu = shearmod_mean
-                kron = num.zeros_like(eps)
-                kron[:, diag_ind] = 1.
 
-                stress_ned = kron * lamb * dilatation + 2. * mu * eps
+                # TODO: Why dilatation+2?
+                stress_ned = kron * lambda_mean * dilatation+2. * mu_mean * eps
                 rotmat = ned2sdn_rotmat(
                     source_patches_list[isource].strike,
                     source_patches_list[isource].dip)
