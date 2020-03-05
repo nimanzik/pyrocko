@@ -15,6 +15,7 @@ show_plot = int(os.environ.get('MPL_SHOW', 0))
 
 
 class OkadaTestCase(unittest.TestCase):
+
     def test_okada(self):
         n = 1
 
@@ -71,15 +72,15 @@ class OkadaTestCase(unittest.TestCase):
             for i in range(n)]
         source_patches2 = num.array([
             source.source_patch() for source in source_list2])
-        assert (source_patches == source_patches2).all()
+        num.testing.assert_equal(source_patches, source_patches2)
 
         source_disl2 = num.array([
             patch.source_disloc() for patch in source_list2])
-        assert (source_disl == source_disl2).all()
+        num.testing.assert_equal(source_disl, source_disl2)
 
         results2 = okada_ext.okada(
             source_patches2, source_disl2, receiver_coords, lamb, mu, nthreads)
-        assert (results == results2).all()
+        num.testing.assert_equal(results, results2)
 
         seismic_moment = \
             mu * num.sum(num.abs([al1, al2])) * \
@@ -112,6 +113,30 @@ class OkadaTestCase(unittest.TestCase):
             vals = num.array([u[0][i], u_check[i]])
             assert num.abs(u[0][i]) - num.abs(u_check[i]) < 1e-5
             assert num.all(vals > 0.) or num.all(vals < 0.)
+
+    def test_okada_benchmark(self):
+        nlength = 100
+        nwidth = 10
+
+        al1 = -80.
+        al2 = -al1
+        aw1 = -30.
+        aw2 = -aw1
+
+        strike = 0.
+        dip = 70.
+
+        ref_north = 100.
+        ref_east = 200.
+        ref_depth = 50.
+
+        source = OkadaSource(
+            lat=1., lon=-1., north_shift=ref_north, east_shift=ref_east,
+            depth=ref_depth,
+            al1=al1, al2=al2, aw1=aw1, aw2=aw2, strike=strike, dip=dip)
+
+        source_disc, _ = source.discretize(nlength, nwidth)
+
 
     def test_okada_discretize(self):
         nlength = 100
@@ -164,9 +189,11 @@ class OkadaTestCase(unittest.TestCase):
         source_coords[:, 1] += ref_east
         source_coords[:, 2] += ref_depth
 
-        assert (source_coords == num.array([
-            [src.north_shift, src.east_shift, src.depth]
-            for src in source_disc])).all()
+        num.testing.assert_equal(
+            source_coords,
+            num.array([
+                [src.north_shift, src.east_shift, src.depth]
+                for src in source_disc]))
 
         if show_plot:
             import matplotlib.pyplot as plt
@@ -230,11 +257,11 @@ class OkadaTestCase(unittest.TestCase):
 
         assert num.linalg.slogdet(num.dot(gf.T, gf)) != (0., num.inf)
         assert num.linalg.slogdet(num.dot(gf2.T, gf2)) != (0., num.inf)
-        assert (gf == gf2).all()
+        num.testing.assert_equal(gf, gf2)
 
         # Function to test the computed GF
         dstress = -1.5e6
-        stress_comp = 1
+        stress_comp = 1.
 
         stress = num.zeros((nlength * nwidth * n_eq, 1))
         for iw in range(nwidth):
@@ -348,12 +375,14 @@ class OkadaTestCase(unittest.TestCase):
         idx = line
         idx2 = (nwidth - 1) * nlength + line + 1
 
-        assert num.mean(num.abs(
-            disloc_grif[:, 2] -
-            disloc_est[idx * 3 + 2:idx2 * 3 + 2:3 * nlength])) < 0.001
+        num.testing.assert_allclose(
+            disloc_grif[:, 2],
+            disloc_est[idx * 3 + 2:idx2 * 3 + 2:3 * nlength],
+            atol=1e-2)
 
         if show_plot:
             import matplotlib.pyplot as plt
+
             def add_subplot(fig, ntot, n, title, comp, typ='line'):
                 ax = fig.add_subplot(ntot, 1, n)
                 if typ == 'line':
@@ -452,12 +481,14 @@ class OkadaTestCase(unittest.TestCase):
         indices = num.arange(source_coords.shape[0])[source_coords[:, 0] == 0.]
         line = int(nlength / 2.)
 
-        assert num.abs(
-            num.max(num.abs(disloc_grif[:, 2])) -
-            num.max(num.abs(disloc_est[indices * 3 + 2]))) < 0.001
+        num.testing.assert_allclose(
+            disloc_grif[:, 2],
+            disloc_est[indices * 3 + 2],
+            atol=1e-2)
 
         if show_plot:
             import matplotlib.pyplot as plt
+
             def add_subplot(fig, ntot, n, title, comp, typ='line'):
                 ax = fig.add_subplot(ntot, 1, n)
                 if typ == 'line':
