@@ -1012,7 +1012,7 @@ static PyObject* w_dc3d_flexi(
             private(uout, irec, isource, i, alpha)\
             num_threads(nthreads)
         {
-        #pragma omp for schedule(static)
+        #pragma omp for schedule(static) nowait
     #endif
         for (irec=0; irec<nrec; irec++) {
             for (isource=0; isource<nsources; isource++) {

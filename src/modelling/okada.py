@@ -311,14 +311,14 @@ class DislocationInverter(object):
             src.source_patch() for src in source_patches_list])
         receiver_coords = source_patches[:, :3].copy()
 
-        nsources = len(source_patches_list)
+        npoints = len(source_patches_list)
 
         if pure_shear:
             n_eq = 2
         else:
             n_eq = 3
 
-        coefmat = num.zeros((nsources * 3, nsources * 3))
+        coefmat = num.zeros((npoints * 3, npoints * 3))
 
         def ned2sdn_rotmat(strike, dip):
             return mt.euler_to_matrix((dip + 180.)*d2r, strike*d2r, 0.).A
@@ -352,8 +352,8 @@ class DislocationInverter(object):
 
             for isource, source in enumerate(source_patches):
                 results = okada_ext.okada(
-                    source[num.newaxis, :].copy(),
-                    source_disl[num.newaxis, :].copy(),
+                    source[num.newaxis, :],
+                    source_disl[num.newaxis, :],
                     receiver_coords,
                     lambda_mean,
                     shearmod_mean,
@@ -372,20 +372,19 @@ class DislocationInverter(object):
                 kron[:, diag_ind] = 1.
 
                 stress_ned = kron * lamb * dilatation + 2. * mu * eps
-
                 rotmat = ned2sdn_rotmat(
                     source_patches_list[isource].strike,
                     source_patches_list[isource].dip)
 
                 stress_sdn = num.einsum(
                     'ij,...jk,lk->...il',
-                    rotmat, stress_ned.reshape(nsources, 3, 3), rotmat)
+                    rotmat, stress_ned.reshape(npoints, 3, 3), rotmat,
+                    optimize=True)
 
-                stress_sdn = stress_sdn.reshape(nsources, 9)
+                stress_sdn = stress_sdn.reshape(npoints, 9)
 
                 coefmat[0::3, isource * 3 + idisl] = -stress_sdn[:, 2].ravel()
                 coefmat[1::3, isource * 3 + idisl] = -stress_sdn[:, 5].ravel()
-
                 if n_eq == 3:
                     coefmat[2::3, isource * 3 + idisl] = \
                         -stress_sdn[:, 8].ravel()
