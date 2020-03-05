@@ -312,6 +312,7 @@ class DislocationInverter(object):
         receiver_coords = source_patches[:, :3].copy()
 
         npoints = len(source_patches_list)
+        path = None
 
         if pure_shear:
             n_eq = 2
@@ -376,10 +377,16 @@ class DislocationInverter(object):
                     source_patches_list[isource].strike,
                     source_patches_list[isource].dip)
 
+                if path is None:
+                    path = num.einsum_path(
+                        'ij,...jk,lk->...il',
+                        rotmat, stress_ned.reshape(npoints, 3, 3), rotmat,
+                        optimize='greedy')[0]
+
                 stress_sdn = num.einsum(
                     'ij,...jk,lk->...il',
                     rotmat, stress_ned.reshape(npoints, 3, 3), rotmat,
-                    optimize=True)
+                    optimize=path)
 
                 stress_sdn = stress_sdn.reshape(npoints, 9)
 
