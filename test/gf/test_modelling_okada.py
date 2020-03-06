@@ -119,7 +119,7 @@ class OkadaTestCase(unittest.TestCase):
             assert num.all(vals > 0.) or num.all(vals < 0.)
 
     def test_okada_inv_benchmark(self):
-        nlength = 50
+        nlength = 40
         nwidth = 10
 
         al1 = -40.
@@ -151,9 +151,17 @@ class OkadaTestCase(unittest.TestCase):
             return DislocationInverter.get_coef_mat_bulk(
                 source_disc, nthreads=3)
 
+        @benchmark.labeled('okada_slow')
+        def calc_slow():
+            return DislocationInverter.get_coef_mat_slow(
+                source_disc, nthreads=3)
+
         res1 = calc()
         res2 = calc_bulk()
+        res3 = calc_slow()
+
         num.testing.assert_equal(res1, res2)
+        num.testing.assert_equal(res2, res3)
         print(benchmark)
 
     def test_okada_rotate_sdn(self):

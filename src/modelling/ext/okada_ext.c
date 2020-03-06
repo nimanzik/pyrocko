@@ -1043,7 +1043,7 @@ static PyObject* w_dc3d_flexi(PyObject *m, PyObject *args, PyObject *kwds) {
             private(uout, irec, isource, i, alpha)\
             num_threads(nthreads)
         {
-        #pragma omp for schedule(dynamic)
+        #pragma omp for schedule(static)
     #endif
         for (irec=0; irec<nrec; irec++) {
             for (isource=0; isource<nsources; isource++) {
@@ -1062,7 +1062,7 @@ static PyObject* w_dc3d_flexi(PyObject *m, PyObject *args, PyObject *kwds) {
                     }
                 } else {
                     for(i=0; i<12; i++) {
-                        output[isource*nrec*12 + irec*12+i] += uout[i];
+                        output[isource*nrec*12 + irec*12+i] = uout[i];
                     }
                     // memcpy(output + isource*nrec*12 + irec*12, uout, size_rec);
                 }
