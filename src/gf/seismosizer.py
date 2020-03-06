@@ -2466,7 +2466,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         '''
         Discretize source plane with equal vertical and horizontal spacing
 
-        Arguments and keyword arguments needed for self.points_on_source.
+        Arguments and keyword arguments needed for ``points_on_source``.
 
         :param store: Greens function database (needs to cover whole region of
             of the source)
@@ -2494,7 +2494,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         nx += 1
         ny += 1
 
-        points_xy = num.zeros((nx * ny, 2))
+        points_xy = num.empty((nx * ny, 2))
         points_xy[:, 0] = num.tile(
             num.linspace(-1., 1., nx),
             ny)
@@ -2516,7 +2516,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         :type store: optional, :py:class:`pyrocko.gf.store.Store`
         :param target: Target information
         :type target: optional, :py:class:`pyrocko.gf.target.Target`
-        :param points: xy coordinates on fault (-1:1) of discrete points
+        :param points: xy coordinates on fault (-1.:1.) of discrete points
         :type points: optional, :py:class:`numpy.ndarray`, ``(n_points, 2)``
 
         :return: Rupture velocity assumed as vs * gamma for discrete points
@@ -2531,9 +2531,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         else:
             interpolation = 'nearest_neighbor'
             logger.warn(
-                'no target information available, will use '
-                '"nearest_neighbor" interpolation when extracting shear '
-                'modulus from earth model')
+                'no target information available, will use'
+                ' "nearest_neighbor" interpolation when extracting shear'
+                ' modulus from earth model')
 
         return store.config.get_vs(
             self.lat,
@@ -2559,8 +2559,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         :type target: optional, :py:class:`pyrocko.gf.target.Target`
         :param times: Array, containing zeros, where rupture is starting and
             otherwise -1, where time will be calculated. If not given, rupture
-            starts and 0, 0. Times are given for discrete points with equal
-            horizontal and vertical spacing
+            starts at nucleation_x, nucleation_y.
+            Times are given for discrete points with equal horizontal
+            and vertical spacing
         :type times: optional, :py:class:`numpy.ndarray`
 
         :return: Coordinates (latlondepth), Coordinates (xy), rupture velocity
@@ -2578,7 +2579,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         vr = self._discretize_vr(
             store=store, target=target, points=points).reshape(ny, nx)
 
-        def initialize_times(nx, ny, nucl_times=None):
+        def initialize_times(nucl_times=None):
             nucl_x, nucl_y = self.nucleation_x, self.nucleation_y
 
             if not isinstance(nucl_x, num.ndarray):
@@ -2593,37 +2594,24 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             dist_points = num.array([
                 num.linalg.norm(points_xy - num.array([x, y]), axis=1)
                 for x, y in zip(nucl_x, nucl_y)]).T
-
-            nucl_indices = num.array([
-                num.where(
-                    dist_points[:, icol] == num.min(dist_points[:, icol],
-                    axis=0)
-                )[0] for icol in range(nucl_x.shape[0])]).reshape(-1)
+            nucl_indices = num.argmin(dist_points, axis=0)
 
             if nucl_times is None:
                 nucl_times = num.zeros_like(nucl_indices)
-            t = num.zeros(nx * ny) - 1.
+
+            t = num.full(nx*ny, -1.)
             t[nucl_indices] = nucl_times
-            return t.reshape(ny, nx)
+            return t.reshape(nx, ny)
 
         if times is None:
-            times = initialize_times(
-                nx,
-                ny,
-                nucl_times=None)
+            times = initialize_times(nucl_times=None)
         elif times.shape != tuple((ny, nx)):
-            times = initialize_times(
-                nx,
-                ny,
-                nucl_times=None)
+            times = initialize_times(nucl_times=None)
             logger.warn(
                 'Given times are not in right shape. Therefore standard time '
                 'array is used.')
 
-        eikonal_ext.eikonal_solver_fmm_cartesian(
-                        vr,
-                        times,
-                        delta)
+        eikonal_ext.eikonal_solver_fmm_cartesian(vr, times, delta)
 
         return points, points_xy, vr, times
 
@@ -2692,14 +2680,13 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         def get_lame(config, *args, **kwargs):
             shear_mod = config.get_shear_moduli(*args, **kwargs)
-            lamb = config.get_vp(
-                *args, **kwargs)**2 * config.get_rho(
-                *args, **kwargs) - 2. * shear_mod
+            lamb = config.get_vp(*args, **kwargs)**2 \
+                * config.get_rho(*args, **kwargs) - 2.*shear_mod
             return shear_mod, lamb / (2. * (lamb + shear_mod))
 
         shear_mod, poisson = get_lame(store.config, *cfg_args, **cfg_kwargs)
 
-        src = OkadaSource(
+        okada_src = OkadaSource(
             lat=self.lat, lon=self.lon,
             strike=self.strike, dip=self.dip, rake=self.rake,
             north_shift=self.north_shift, east_shift=self.east_shift,
@@ -2716,34 +2703,30 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 self.nx = int(num.floor(nx / self.decimation_factor))
                 self.ny = int(num.floor(ny / self.decimation_factor))
 
-        source_disc, source_points = src.discretize(self.nx, self.ny)
+        source_disc, source_points = okada_src.discretize(self.nx, self.ny)
+
         cfg_args = [
             self.lat,
             self.lon,
             num.array([source.source_patch()[:3] for source in source_disc])]
         shear_mod, poisson = get_lame(store.config, *cfg_args, **cfg_kwargs)
 
-        for isrc in range(len(source_disc)):
-            source_disc[isrc].shearmod = shear_mod[isrc]
-            source_disc[isrc].poisson = poisson[isrc]
-
         if (self.nx, self.ny) != (nx, ny):
-            times_interp = time_interpolator(
-                num.hstack((
-                    source_points[:, 0].reshape(-1, 1),
-                    source_points[:, 1].reshape(-1, 1))))
+            points = num.hstack((
+                    source_points[:, 0].ravel(),
+                    source_points[:, 1].ravel()))
 
-            vr_interp = vr_interpolator(
-                num.hstack((
-                    source_points[:, 0].reshape(-1, 1),
-                    source_points[:, 1].reshape(-1, 1))))
+            times_interp = time_interpolator(points)
+            vr_interp = vr_interpolator(points)
         else:
             times_interp = times.T.ravel()
             vr_interp = vr.T.ravel()
 
-        for isrc in range(len(source_disc)):
-            source_disc[isrc].vr = vr_interp[isrc]
-            source_disc[isrc].time = times_interp[isrc] + self.time
+        for isrc, src in enumerate(source_disc):
+            src.shearmod = shear_mod[isrc]
+            src.poisson = poisson[isrc]
+            src.vr = vr_interp[isrc]
+            src.time = times_interp[isrc] + self.time
 
         self.patches = source_disc
 
@@ -2793,7 +2776,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         points = num.array([patch.source_patch()[:3] for patch in self.patches])
         points = num.tile(points, nt).reshape(-1, 3)
-        area = self.patches[0].area
+        patch_area = self.patches[0].area
 
         strikes = self.get_patch_attribute('strike').repeat(nt)
         dips = self.get_patch_attribute('dip').repeat(nt)
@@ -2811,7 +2794,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             momentmat = num.matrix(
                 [[lamb * du_n, 0., -mu * du_s],
                  [0., lamb * du_n, 0.],
-                 [-mu * du_s, 0., (lamb + 2. * mu) * du_n]]) * area
+                 [-mu * du_s, 0., (lamb + 2. * mu) * du_n]]) * patch_area
 
             return pmt.to6(rotmat.T * momentmat * rotmat)
 

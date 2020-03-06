@@ -5,8 +5,10 @@ from pyrocko.plot import dislocation as displt
 
 km = 1e3
 
-# Set Source parameters
-ref_north, ref_east, ref_depth = 0. * km, 0. * km, 100. * km
+# Set source parameters
+ref_north = 0*km
+ref_east = 0*km
+ref_depth = 50.*km
 
 length_total = 50. * km
 width_total = 15. * km
@@ -37,6 +39,7 @@ dstress = -1.5e6
 stress_comp = 1
 
 stress_field = num.zeros((npoints * 3, 1))
+
 for iw in range(nwidth):
     for il in range(nlength):
         idx = (iw * nlength + il) * 3
@@ -50,7 +53,7 @@ for iw in range(nwidth):
 disloc_est = DislocationInverter.get_disloc_lsq(
     stress_field, source_list=source_discretized)
 
-# Plot
+
 displt.plot(
     disloc_est.reshape(npoints, 3),
     receiver_coords,

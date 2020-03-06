@@ -351,7 +351,7 @@ class DislocationInverter(object):
                 case['slip'] * num.sin(case['rake'] * d2r),
                 case['opening']])
 
-            for isource, source in enumerate(source_patches):
+            for isrc, source in enumerate(source_patches):
                 results = okada_ext.okada(
                     source[num.newaxis, :],
                     source_disl[num.newaxis, :],
@@ -369,11 +369,9 @@ class DislocationInverter(object):
                 dilatation = num.sum(eps[:, diag_ind], axis=1)[:, num.newaxis]
                 stress_sdn = kron * lambda_mean * dilatation+2. * mu_mean * eps
 
-                coefmat[0::3, isource * 3 + idisl] = -stress_sdn[:, 2].ravel()
-                coefmat[1::3, isource * 3 + idisl] = -stress_sdn[:, 5].ravel()
-                if n_eq == 3:
-                    coefmat[2::3, isource * 3 + idisl] = \
-                        -stress_sdn[:, 8].ravel()
+                coefmat[:, isrc*3 + idisl] = -stress_sdn[:, (2, 5, 8)].ravel()
+                if pure_shear:
+                    coefmat[2::3, isrc * 3 + idisl] = 0.
 
         return coefmat / unit_disl
 

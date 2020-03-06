@@ -135,7 +135,7 @@ static void ua(
         du[10] = c0->alp2*c2->ez;
         du[11] = - c0->alp1*(c0->sd/c2->r - qy*c0->cd) - c0->alp2*q*c2->fz;
         for (i=0; i<12; i++) {
-            u[i] = u[i] + disl1/(M_PI*2.0)*du[i];
+            u[i] += disl1/(M_PI*2.0)*du[i];
         }
     }
 
@@ -155,7 +155,7 @@ static void ua(
         du[10] = c0->alp1*c2->y*c2->x11 + xy/2.0*c0->cd + c0->alp2*et*c2->gz;
         du[11] = - c0->alp1*c2->d*c2->x11 - c0->alp2*q*c2->gz;
         for (i=0; i<12; i++) {
-            u[i] = u[i] + disl2/(M_PI*2.0)*du[i];
+            u[i] += disl2/(M_PI*2.0)*du[i];
         }
     }
 
@@ -175,7 +175,7 @@ static void ua(
         du[10] = c0->alp1*c2->d*c2->x11 - c0->alp2*q*c2->gz;
         du[11] = c0->alp1*(c2->y*c2->x11 + xy*c0->cd) + c0->alp2*q*c2->hz;
         for (i=0; i<12; i++) {
-            u[i] = u[i] + disl3/(M_PI*2.0)*du[i];
+            u[i] += disl3/(M_PI*2.0)*du[i];
         }
     }
 }
@@ -202,7 +202,6 @@ static void ub(
      */
 
     double ai1, ai2, ai3, ai4, aj1, aj2, aj3, aj4, aj5, aj6, ak1, ak2, ak3, ak4, d11, qx, qy, rd, rd2, x, xy;
-
     double du[12];
 
     int i;
@@ -264,7 +263,7 @@ static void ub(
         du[10] = - c2->ez + c0->alp3*c2->y*d11*c0->sd;
         du[11] = q*c2->fz + c0->alp3*ak2*c0->sd;
         for (i=0; i<12; i++) {
-            u[i] = u[i]+disl1/(2.0*M_PI)*du[i];
+            u[i] += disl1/(2.*M_PI)*du[i];
         }
     }
 
@@ -284,7 +283,7 @@ static void ub(
         du[10] = - et*c2->gz - xy*c0->cd - c0->alp3*xi*d11*c0->sdcd;
         du[11] = q*c2->gz - c0->alp3*ak4*c0->sdcd;
         for (i=0; i<12; i++) {
-            u[i] = u[i] + disl2/(2.0*M_PI)*du[i];
+            u[i] += disl2/(2.*M_PI)*du[i];
         }
     }
 
@@ -304,7 +303,7 @@ static void ub(
         du[10] = q*c2->gz + c0->alp3*xi*d11*c0->sdsd;
         du[11] = - q*c2->hz + c0->alp3*ak4*c0->sdsd;
         for (i=0; i<12; i++) {
-            u[i] = u[i] + disl3/(2.0*M_PI)*du[i];
+            u[i] += disl3/(2.*M_PI)*du[i];
         }
     }
 }
@@ -376,7 +375,7 @@ static void uc(
         du[10] = c0->alp4*2.0*(c2->y/c2->r3 - y0*c0->cd)*c0->sd + c2->d/c2->r3*c0->cd - c0->alp5*(cdr*c0->cd + c*c2->d*qr);
         du[11] = yy0*c0->cd - c0->alp5*(cdr*c0->sd - c*c2->y*qr - y0*c0->sdsd + q*z0*c0->cd);
         for (i=0; i<12; i++) {
-            u[i] = u[i] + disl1/(M_PI*2.0)*du[i];
+            u[i] += disl1/(2.*M_PI)*du[i];
         }
     }
 
@@ -396,7 +395,7 @@ static void uc(
         du[10] = c0->alp4*c2->y*c2->d*c2->x32 - c0->alp5*c*((c2->y - 2.0*q*c0->sd)*c2->x32 + c2->d*et*q*x53);
         du[11] = - xi*ppz*c0->sd + c2->x11 - c2->d*c2->d*c2->x32 - c0->alp5*c*((c2->d - 2.0*q*c0->cd)*c2->x32 - c2->d*c2->q2*x53);
         for (i=0; i<12; i++) {
-            u[i] = u[i] + disl2/(M_PI*2.0)*du[i];
+            u[i] += disl2/(2.*M_PI)*du[i];
         }
     }
 
@@ -416,7 +415,7 @@ static void uc(
         du[10] = c0->alp4*2.0*xi*ppz*c0->sd - c2->x11 + c2->d*c2->d*c2->x32 - c0->alp5*c*((c2->d - 2.0*q*c0->cd)*c2->x32 - c2->d*c2->q2*x53);
         du[11] = c0->alp4*(xi*ppz*c0->cd + c2->y*c2->d*c2->x32) + c0->alp5*(c*((c2->y - 2.0*q*c0->sd)*c2->x32 + c2->d*et*q*x53) + xi*qqz);
         for (i=0; i<12; i++) {
-            u[i] = u[i] + disl3/(M_PI*2.0)*du[i];
+            u[i] += disl3/(2.*M_PI)*du[i];
         }
     }
 }
@@ -715,13 +714,13 @@ static okada_error_t dc3d(
                 du[i+1] = (dua[i+1] + dub[i+1] + z*duc[i+1])*c0.cd - (dua[i+2] + dub[i+2] + z*duc[i+2])*c0.sd;
                 du[i+2] = (dua[i+1] + dub[i+1] - z*duc[i+1])*c0.sd + (dua[i+2] + dub[i+2] - z*duc[i+2])*c0.cd;
             }
-            du[9] = du[9] + duc[0];
-            du[10] = du[10] + duc[1]*c0.cd - duc[2]*c0.sd;
-            du[11] = du[11] - duc[1]*c0.sd - duc[2]*c0.cd;
+            du[9] += duc[0];
+            du[10] += duc[1]*c0.cd - duc[2]*c0.sd;
+            du[11] += -duc[1]*c0.sd - duc[2]*c0.cd;
 
             for (i=0; i<12; i++) {
-                if (j == k) u[i] = u[i] + du[i];
-                if (j != k) u[i] = u[i] - du[i];
+                if (j == k) u[i] += du[i];
+                if (j != k) u[i] -= du[i];
             }
         }
     }
@@ -812,6 +811,26 @@ void rot_u(
     }
 }
 
+void euler_to_matrix(double alpha, double beta, double rotmat[3][3]) {
+    double ca = cos(alpha);
+    double cb = cos(beta);
+    double cg = 1.;
+    double sa = sin(alpha);
+    double sb = sin(beta);
+    double sg = 0.;
+
+    rotmat[0][0] = cb*cg-ca*sb*sg;
+    rotmat[0][1] = sb*cg+ca*cb*sg;
+    rotmat[0][2] = sa*sg;
+
+    rotmat[1][0] = -cb*sg-ca*sb*cg;
+    rotmat[1][1] = -sb*sg+ca*cb*cg;
+    rotmat[1][2] = sa*cg;
+
+    rotmat[2][0] = sa*sb;
+    rotmat[2][1] = -sa*cb;
+    rotmat[2][2] = ca;
+}
 
 static okada_error_t dc3d_flexi(
         double alpha,  // (lambda + mu) / (lambda + 2. * mu)
@@ -872,28 +891,6 @@ static okada_error_t dc3d_flexi(
     }
 
     return iret;
-}
-
-
-void euler_to_matrix(double alpha, double beta, double rotmat[3][3]) {
-    double ca = cos(alpha);
-    double cb = cos(beta);
-    double cg = 1.;
-    double sa = sin(alpha);
-    double sb = sin(beta);
-    double sg = 0.;
-
-    rotmat[0][0] = cb*cg-ca*sb*sg;
-    rotmat[0][1] = sb*cg+ca*cb*sg;
-    rotmat[0][2] = sa*sg;
-
-    rotmat[1][0] = -cb*sg-ca*sb*cg;
-    rotmat[1][1] = -sb*sg+ca*cb*cg;
-    rotmat[1][2] = sa*cg;
-
-    rotmat[2][0] = sa*sb;
-    rotmat[2][1] = -sa*cb;
-    rotmat[2][2] = ca;
 }
 
 
@@ -971,11 +968,7 @@ int halfspace_check(
 }
 
 
-static PyObject* w_dc3d_flexi(
-    PyObject *m,
-    PyObject *args,
-    PyObject *kwds) {
-
+static PyObject* w_dc3d_flexi(PyObject *m, PyObject *args, PyObject *kwds) {
     int nthreads, rot_sdn;
     unsigned long nrec, nsources, irec, isource, i;
 
@@ -1067,7 +1060,7 @@ static PyObject* w_dc3d_flexi(
 
 
 static PyMethodDef okada_ext_methods[] = {
-    {"okada", w_dc3d_flexi, METH_VARARGS | METH_KEYWORDS,
+    {"okada", (PyCFunctionWithKeywords) w_dc3d_flexi, METH_VARARGS | METH_KEYWORDS,
      "Calculates the static displacement and its derivatives from Okada Source"},
 
     {NULL, NULL, 0, NULL}        /* Sentinel */
