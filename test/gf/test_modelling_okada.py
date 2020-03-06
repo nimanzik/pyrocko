@@ -143,9 +143,17 @@ class OkadaTestCase(unittest.TestCase):
 
         @benchmark.labeled('okada_inv')
         def calc():
-            DislocationInverter.get_coef_mat(source_disc, nthreads=5)
+            return DislocationInverter.get_coef_mat(
+                source_disc, nthreads=3)
 
-        calc()
+        @benchmark.labeled('okada_inv_bulk')
+        def calc_bulk():
+            return DislocationInverter.get_coef_mat_bulk(
+                source_disc, nthreads=3)
+
+        res1 = calc()
+        res2 = calc_bulk()
+        num.testing.assert_equal(res1, res2)
         print(benchmark)
 
     def test_okada_rotate_sdn(self):

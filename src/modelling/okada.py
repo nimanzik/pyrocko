@@ -3,6 +3,7 @@
 # The Pyrocko Developers, 21st Century
 # ---|P------/S----------~Lg----------
 import numpy as num
+import time
 import logging
 
 from pyrocko import moment_tensor as mt
@@ -283,6 +284,100 @@ class DislocationInverter(object):
     '''
 
     @staticmethod
+    def get_coef_mat_bulk(source_patches_list, pure_shear=False,
+                          rotate_sdn=True, nthreads=0):
+        '''
+        Build coefficient matrix for given source_patches
+
+        The BEM for a fault and the determination of the slip distribution from
+        the stress drop is based on the relation stress = coef_mat * displ.
+        Here the coefficient matrix is build and filled based on the
+        okada_ext.okada displacements and partial displacement
+        differentiations.
+
+        :param source_patches_list: list of all OkadaSources, which shall be
+            used for BEM
+        :type source_patches_list: list of
+            :py:class:`pyrocko.modelling.OkadaSource`
+        :param pure_shear: Flag, if also opening mode shall be taken into
+            account (False) or the fault is described as pure shear (True).
+        :type pure_shear: optional, Bool
+
+        :return: coefficient matrix for all sources
+        :rtype: :py:class:`numpy.ndarray`,
+            ``(len(source_patches_list) * 3, len(source_patches_list) * 3)``
+        '''
+
+        source_patches = num.array([
+            src.source_patch() for src in source_patches_list])
+        receiver_coords = source_patches[:, :3].copy()
+
+        npoints = len(source_patches_list)
+
+        if pure_shear:
+            n_eq = 2
+        else:
+            n_eq = 3
+
+        coefmat = num.zeros((npoints * 3, npoints * 3))
+
+        lambda_mean = num.mean([src.lamb for src in source_patches_list])
+        mu_mean = num.mean([src.shearmod for src in source_patches_list])
+
+        unit_disl = 1.
+        disl_cases = {
+            'strikeslip': {
+                'slip': unit_disl,
+                'opening': 0.,
+                'rake': 0.},
+            'dipslip': {
+                'slip': unit_disl,
+                'opening': 0.,
+                'rake': 90.},
+            'tensileslip': {
+                'slip': 0.,
+                'opening': unit_disl,
+                'rake': 0.}
+        }
+
+        diag_ind = [0, 4, 8]
+        kron = num.zeros(9)
+        kron[diag_ind] = 1.
+        kron = kron[num.newaxis, num.newaxis, :]
+
+        for idisl, case_type in enumerate([
+                'strikeslip', 'dipslip', 'tensileslip'][:n_eq]):
+            case = disl_cases[case_type]
+            source_disl = num.array([
+                case['slip'] * num.cos(case['rake'] * d2r),
+                case['slip'] * num.sin(case['rake'] * d2r),
+                case['opening']])
+
+            results = okada_ext.okada(
+                source_patches,
+                num.tile(source_disl, npoints).reshape(-1, 3),
+                receiver_coords,
+                lambda_mean,
+                mu_mean,
+                nthreads=nthreads,
+                rotate_sdn=rotate_sdn,
+                stack_sources=False)
+
+            eps = 0.5 * (results[:, :, 3:] +
+                         results[:, :, (3, 6, 9, 4, 7, 10, 5, 8, 11)])
+
+            dilatation = eps[:, :, diag_ind].sum(axis=-1)[:, :, num.newaxis]
+
+            stress_sdn = kron*lambda_mean*dilatation + 2.*mu_mean*eps
+            coefmat[:, idisl::3] = stress_sdn[:, :, (2, 5, 8)]\
+                .reshape(-1, npoints*3).T
+
+        if pure_shear:
+            coefmat[2::3, :] = 0.
+
+        return -coefmat / unit_disl
+
+    @staticmethod
     def get_coef_mat(source_patches_list, pure_shear=False,
                      rotate_sdn=True, nthreads=0):
         '''
@@ -339,9 +434,10 @@ class DislocationInverter(object):
                 'rake': 0.}
         }
 
-        diag_ind = (0, 4, 8)
-        kron = num.zeros((npoints, 9))
-        kron[:, diag_ind] = 1.
+        diag_ind = [0, 4, 8]
+        kron = num.zeros(9)
+        kron[diag_ind] = 1.
+        kron = kron[num.newaxis, :]
 
         for idisl, case_type in enumerate([
                 'strikeslip', 'dipslip', 'tensileslip'][:n_eq]):
@@ -369,11 +465,12 @@ class DislocationInverter(object):
                 dilatation = num.sum(eps[:, diag_ind], axis=1)[:, num.newaxis]
                 stress_sdn = kron * lambda_mean * dilatation+2. * mu_mean * eps
 
-                coefmat[:, isrc*3 + idisl] = -stress_sdn[:, (2, 5, 8)].ravel()
+                coefmat[:, isrc*3 + idisl] = stress_sdn[:, (2, 5, 8)].ravel()
+
                 if pure_shear:
                     coefmat[2::3, isrc * 3 + idisl] = 0.
 
-        return coefmat / unit_disl
+        return -coefmat / unit_disl
 
     @staticmethod
     def get_coef_mat_slow(source_patches_list, pure_shear=False,

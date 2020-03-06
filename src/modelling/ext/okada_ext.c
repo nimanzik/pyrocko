@@ -969,7 +969,7 @@ int halfspace_check(
 
 
 static PyObject* w_dc3d_flexi(PyObject *m, PyObject *args, PyObject *kwds) {
-    int nthreads, rot_sdn;
+    int nthreads, rot_sdn, stack_sources;
     unsigned long nrec, nsources, irec, isource, i;
 
     PyObject *source_patches_arr, *source_disl_arr, *receiver_coords_arr, *output_arr;
@@ -978,25 +978,33 @@ static PyObject* w_dc3d_flexi(PyObject *m, PyObject *args, PyObject *kwds) {
     double lambda, mu;
     double uout[12], alpha;
     npy_intp shape_want[2];
-    npy_intp output_dims[2];
+    npy_intp output_dims[3];
+    npy_intp output_ndims;
 
     struct module_state *st = GETSTATE(m);
 
     nthreads = 1;
     rot_sdn = 0;
+    stack_sources = 1;
 
     static char *kwlist[] = {
         "source_patches_arr", "source_disl_arr", "receiver_coords_arr", "lambda", "mu",
-        "nthreads", "rotate_sdn",
+        "nthreads", "rotate_sdn", "stack_sources",
         NULL
     };
 
-    if (! PyArg_ParseTupleAndKeywords(args, kwds, "OOOdd|Ip", kwlist, &source_patches_arr, &source_disl_arr, &receiver_coords_arr, &lambda, &mu, &nthreads, &rot_sdn)) {
-        PyErr_SetString(st->error, "usage: okada(Sourcepatches(north, east, down, strike, dip, al1, al2, aw1, aw2), Dislocation(strike, dip, opening), ReceiverCoords(north, east, down), Lambda, Mu, NumThreads(0 equals all)");
+    if (! PyArg_ParseTupleAndKeywords(args, kwds, "OOOdd|Ipp", kwlist, &source_patches_arr, &source_disl_arr, &receiver_coords_arr, &lambda, &mu, &nthreads, &rot_sdn, &stack_sources)) {
+        PyErr_SetString(st->error, "usage: okada(source_patches_arr, disl_arr, receiver_coords_arr, lambda, mu, nthreads=0, rotate_sdn=False, stack_sources=True");
         return NULL;
     }
 
-    shape_want[0] = PyArray_SHAPE((PyArrayObject*) source_patches_arr)[0];
+    nrec = PyArray_SHAPE((PyArrayObject*) receiver_coords_arr)[0];
+    nsources = PyArray_SHAPE((PyArrayObject*) source_patches_arr)[0];
+    receiver_coords = PyArray_DATA((PyArrayObject*) receiver_coords_arr);
+    source_patches = PyArray_DATA((PyArrayObject*) source_patches_arr);
+    source_disl = PyArray_DATA((PyArrayObject*) source_disl_arr);
+
+    shape_want[0] = nsources;
     shape_want[1] = 9;
     if (! good_array(source_patches_arr, NPY_FLOAT64, 2, shape_want))
         return NULL;
@@ -1005,34 +1013,37 @@ static PyObject* w_dc3d_flexi(PyObject *m, PyObject *args, PyObject *kwds) {
     if (! good_array(source_disl_arr, NPY_FLOAT64, 2, shape_want))
         return NULL;
 
-    shape_want[0] = PyArray_SHAPE((PyArrayObject*) receiver_coords_arr)[0];
+    shape_want[0] = nrec;
     if (! good_array(receiver_coords_arr, NPY_FLOAT64, 2, shape_want))
         return NULL;
 
-    nrec = PyArray_SHAPE((PyArrayObject*) receiver_coords_arr)[0];
-    nsources = PyArray_SHAPE((PyArrayObject*) source_patches_arr)[0];
-    receiver_coords = PyArray_DATA((PyArrayObject*) receiver_coords_arr);
-    source_patches = PyArray_DATA((PyArrayObject*) source_patches_arr);
-    source_disl = PyArray_DATA((PyArrayObject*) source_disl_arr);
-
-    output_dims[0] = PyArray_SHAPE((PyArrayObject*) receiver_coords_arr)[0];
-    output_dims[1] = 12;
-    output_arr = PyArray_ZEROS(2, output_dims, NPY_FLOAT64, 0);
-    output = PyArray_DATA((PyArrayObject*) output_arr);
+    if (stack_sources) {
+        output_dims[0] = nrec;
+        output_dims[1] = 12;
+        output_ndims = 2;
+    } else {
+        output_dims[0] = nsources;
+        output_dims[1] = nrec;
+        output_dims[2] = 12;
+        output_ndims = 3;
+    }
 
     if (!halfspace_check(source_patches, receiver_coords, nsources, nrec))
         return NULL;
+
+    output_arr = PyArray_ZEROS(output_ndims, output_dims, NPY_FLOAT64, 0);
+    output = PyArray_DATA((PyArrayObject*) output_arr);
 
     #if defined(_OPENMP)
         Py_BEGIN_ALLOW_THREADS
         if (nthreads <= 0)
             nthreads = omp_get_num_procs();
         #pragma omp parallel\
-            shared(nrec, nsources, lambda, mu, receiver_coords, source_patches, source_disl, output)\
+            shared(nrec, nsources, lambda, mu, receiver_coords, source_patches, source_disl, output, rot_sdn)\
             private(uout, irec, isource, i, alpha)\
             num_threads(nthreads)
         {
-        #pragma omp for schedule(static) nowait
+        #pragma omp for schedule(dynamic)
     #endif
         for (irec=0; irec<nrec; irec++) {
             for (isource=0; isource<nsources; isource++) {
@@ -1045,8 +1056,15 @@ static PyObject* w_dc3d_flexi(PyObject *m, PyObject *args, PyObject *kwds) {
                     source_disl[isource*3], source_disl[isource*3+1], source_disl[isource*3+2],
                     uout, rot_sdn);
 
-                for (i=0; i<12; i++) {
-                    output[irec*12+i] += uout[i];
+                if (stack_sources) {
+                    for(i=0; i<12; i++) {
+                        output[irec*12+i] += uout[i];
+                    }
+                } else {
+                    for(i=0; i<12; i++) {
+                        output[isource*nrec*12 + irec*12+i] += uout[i];
+                    }
+                    // memcpy(output + isource*nrec*12 + irec*12, uout, size_rec);
                 }
             }
         }
