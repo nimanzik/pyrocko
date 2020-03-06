@@ -4,6 +4,7 @@ import numpy as num
 import unittest
 
 from pyrocko import util
+from pyrocko import moment_tensor as mt
 from pyrocko.modelling import DislocationInverter, okada_ext, OkadaSource
 
 from ..common import Benchmark
@@ -142,10 +143,121 @@ class OkadaTestCase(unittest.TestCase):
 
         @benchmark.labeled('okada_inv')
         def calc():
-            DislocationInverter.get_coef_mat(source_disc)
+            DislocationInverter.get_coef_mat(source_disc, nthreads=5)
 
         calc()
         print(benchmark)
+
+    def test_okada_rotate_sdn(self):
+        nlength = 50
+        nwidth = 10
+
+        al1 = -40.
+        al2 = -al1
+        aw1 = -20.
+        aw2 = -aw1
+
+        strike = 0.
+        dip = 70.
+
+        ref_north = 100.
+        ref_east = 200.
+        ref_depth = 50.
+
+        source = OkadaSource(
+            lat=1., lon=-1., north_shift=ref_north, east_shift=ref_east,
+            depth=ref_depth,
+            al1=al1, al2=al2, aw1=aw1, aw2=aw2, strike=strike, dip=dip)
+
+        source_disc, _ = source.discretize(nlength, nwidth)
+        npoints = len(source_disc)
+
+        source_patches = num.array([
+            src.source_patch() for src in source_disc])
+        receiver_coords = source_patches[:, :3].copy()
+        coefmat = num.zeros((npoints * 3, npoints * 3))
+        coefmat_sdn = num.zeros((npoints * 3, npoints * 3))
+
+        def ned2sdn_rotmat(strike, dip):
+            return mt.euler_to_matrix((dip + 180.)*d2r, strike*d2r, 0.).A
+
+        lambda_mean = num.mean([src.lamb for src in source_disc])
+        mu_mean = num.mean([src.shearmod for src in source_disc])
+
+        case = {
+            'slip': 1.,
+            'opening': 0.,
+            'rake': 0.
+        }
+
+        diag_ind = (0, 4, 8)
+        kron = num.zeros((npoints, 9))
+        kron[:, diag_ind] = 1.
+
+        source_disl = num.array([
+            case['slip'] * num.cos(case['rake'] * d2r),
+            case['slip'] * num.sin(case['rake'] * d2r),
+            case['opening']])
+
+        # Python rotation to sdn
+        for isource, source in enumerate(source_patches):
+            results = okada_ext.okada(
+                source[num.newaxis, :],
+                source_disl[num.newaxis, :],
+                receiver_coords,
+                lambda_mean,
+                mu_mean,
+                nthreads=0,
+                rotate_sdn=False)
+
+            eps = \
+                0.5 * (
+                    results[:, 3:] +
+                    results[:, (3, 6, 9, 4, 7, 10, 5, 8, 11)])
+
+            dilatation = num.sum(eps[:, diag_ind], axis=1)[:, num.newaxis]
+
+            stress_ned = kron * lambda_mean * dilatation+2. * mu_mean * eps
+            rotmat = ned2sdn_rotmat(
+                source_disc[isource].strike,
+                source_disc[isource].dip)
+
+            stress_sdn = num.einsum(
+                'ij,...jk,lk->...il',
+                rotmat, stress_ned.reshape(npoints, 3, 3), rotmat,
+                optimize=True)
+
+            stress_sdn = stress_sdn.reshape(npoints, 9)
+
+            coefmat[0::3, isource * 3] = -stress_sdn[:, 2].ravel()
+            coefmat[1::3, isource * 3] = -stress_sdn[:, 5].ravel()
+            coefmat[2::3, isource * 3] = -stress_sdn[:, 8].ravel()
+
+        # c-ext rotation to sdn
+        for isource, source in enumerate(source_patches):
+            results = okada_ext.okada(
+                source[num.newaxis, :],
+                source_disl[num.newaxis, :],
+                receiver_coords,
+                lambda_mean,
+                mu_mean,
+                nthreads=0,
+                rotate_sdn=True)
+
+            eps = \
+                0.5 * (
+                    results[:, 3:] +
+                    results[:, (3, 6, 9, 4, 7, 10, 5, 8, 11)])
+
+            dilatation = num.sum(eps[:, diag_ind], axis=1)[:, num.newaxis]
+
+            stress_sdn = kron * lambda_mean * dilatation+2. * mu_mean * eps
+
+            coefmat_sdn[0::3, isource * 3] = -stress_sdn[:, 2].ravel()
+            coefmat_sdn[1::3, isource * 3] = -stress_sdn[:, 5].ravel()
+            coefmat_sdn[2::3, isource * 3] = -stress_sdn[:, 8].ravel()
+
+        num.testing.assert_allclose(coefmat, coefmat_sdn)
 
     def test_okada_discretize(self):
         nlength = 100

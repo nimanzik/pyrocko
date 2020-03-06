@@ -830,7 +830,8 @@ static okada_error_t dc3d_flexi(
         double disl1,  // dislocation of the source in space
         double disl2,
         double disl3,
-        double *u) {
+        double *u,
+        int rot_sdn) {
 
     /*
      * Wrapper for dc3d function
@@ -844,16 +845,7 @@ static okada_error_t dc3d_flexi(
     okada_error_t iret;
 
     /* rotmat rotates from NED to XYZ (as used by Okada 1992) */
-
-    rotmat[0][0] = cos(strike*D2R);
-    rotmat[0][1] = sin(strike*D2R);
-    rotmat[0][2] = 0.0;
-    rotmat[1][0] = sin(strike*D2R);
-    rotmat[1][1] = -cos(strike*D2R);
-    rotmat[1][2] = 0.0;
-    rotmat[2][0] = 0.0;
-    rotmat[2][1] = 0.0;
-    rotmat[2][2] = -1.0;
+    euler_to_matrix((180.*D2R), strike*D2R, rotmat);
 
     /* calc and rotation of vector Source-Receiver r */
 
@@ -874,8 +866,34 @@ static okada_error_t dc3d_flexi(
     */
 
     rot_u(uokada, rotmat, u);
+    if (rot_sdn == 1) {
+        euler_to_matrix((dip + 180.)*D2R, strike*D2R, rotmat);
+        rot_u(u, rotmat, u);
+    }
 
     return iret;
+}
+
+
+void euler_to_matrix(double alpha, double beta, double rotmat[3][3]) {
+    double ca = cos(alpha);
+    double cb = cos(beta);
+    double cg = 1.;
+    double sa = sin(alpha);
+    double sb = sin(beta);
+    double sg = 0.;
+
+    rotmat[0][0] = cb*cg-ca*sb*sg;
+    rotmat[0][1] = sb*cg+ca*cb*sg;
+    rotmat[0][2] = sa*sg;
+
+    rotmat[1][0] = -cb*sg-ca*sb*cg;
+    rotmat[1][1] = -sb*sg+ca*cb*cg;
+    rotmat[1][2] = sa*cg;
+
+    rotmat[2][0] = sa*sb;
+    rotmat[2][1] = -sa*cb;
+    rotmat[2][2] = ca;
 }
 
 
@@ -930,7 +948,6 @@ int halfspace_check(
     */
 
     unsigned long irec, isrc, src_idx;
-    char msg[1024];
 
     for (isrc=0; isrc<nsources; isrc++) {
         src_idx = isrc * 9;
@@ -956,9 +973,10 @@ int halfspace_check(
 
 static PyObject* w_dc3d_flexi(
     PyObject *m,
-    PyObject *args) {
+    PyObject *args,
+    PyObject *kwds) {
 
-    int nthreads;
+    int nthreads, rot_sdn;
     unsigned long nrec, nsources, irec, isource, i;
 
     PyObject *source_patches_arr, *source_disl_arr, *receiver_coords_arr, *output_arr;
@@ -971,7 +989,16 @@ static PyObject* w_dc3d_flexi(
 
     struct module_state *st = GETSTATE(m);
 
-    if (! PyArg_ParseTuple(args, "OOOddI", &source_patches_arr, &source_disl_arr, &receiver_coords_arr, &lambda, &mu, &nthreads)) {
+    nthreads = 1;
+    rot_sdn = 0;
+
+    static char *kwlist[] = {
+        "source_patches_arr", "source_disl_arr", "receiver_coords_arr", "lambda", "mu",
+        "nthreads", "rotate_sdn",
+        NULL
+    };
+
+    if (! PyArg_ParseTupleAndKeywords(args, kwds, "OOOdd|Ip", kwlist, &source_patches_arr, &source_disl_arr, &receiver_coords_arr, &lambda, &mu, &nthreads, &rot_sdn)) {
         PyErr_SetString(st->error, "usage: okada(Sourcepatches(north, east, down, strike, dip, al1, al2, aw1, aw2), Dislocation(strike, dip, opening), ReceiverCoords(north, east, down), Lambda, Mu, NumThreads(0 equals all)");
         return NULL;
     }
@@ -1022,7 +1049,8 @@ static PyObject* w_dc3d_flexi(
                     receiver_coords[irec*3], receiver_coords[irec*3+1], receiver_coords[irec*3+2],
                     source_patches[isource*9], source_patches[isource*9+1], source_patches[isource*9+2], source_patches[isource*9+3], source_patches[isource*9+4],
                     source_patches[isource*9+5], source_patches[isource*9+6], source_patches[isource*9+7], source_patches[isource*9+8],
-                    source_disl[isource*3], source_disl[isource*3+1], source_disl[isource*3+2], uout);
+                    source_disl[isource*3], source_disl[isource*3+1], source_disl[isource*3+2],
+                    uout, rot_sdn);
 
                 for (i=0; i<12; i++) {
                     output[irec*12+i] += uout[i];
@@ -1039,8 +1067,8 @@ static PyObject* w_dc3d_flexi(
 
 
 static PyMethodDef okada_ext_methods[] = {
-    {"okada", w_dc3d_flexi, METH_VARARGS,
-    "Calculates the static displacement and its derivatives from Okada Source"},
+    {"okada", w_dc3d_flexi, METH_VARARGS | METH_KEYWORDS,
+     "Calculates the static displacement and its derivatives from Okada Source"},
 
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };

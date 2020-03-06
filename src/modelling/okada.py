@@ -283,7 +283,8 @@ class DislocationInverter(object):
     '''
 
     @staticmethod
-    def get_coef_mat(source_patches_list, pure_shear=False, nthreads=0):
+    def get_coef_mat(source_patches_list, pure_shear=False,
+                     rotate_sdn=True, nthreads=0):
         '''
         Build coefficient matrix for given source_patches
 
@@ -311,7 +312,6 @@ class DislocationInverter(object):
         receiver_coords = source_patches[:, :3].copy()
 
         npoints = len(source_patches_list)
-        path = None
 
         if pure_shear:
             n_eq = 2
@@ -319,9 +319,6 @@ class DislocationInverter(object):
             n_eq = 3
 
         coefmat = num.zeros((npoints * 3, npoints * 3))
-
-        def ned2sdn_rotmat(strike, dip):
-            return mt.euler_to_matrix((dip + 180.)*d2r, strike*d2r, 0.).A
 
         lambda_mean = num.mean([src.lamb for src in source_patches_list])
         mu_mean = num.mean([src.shearmod for src in source_patches_list])
@@ -361,7 +358,8 @@ class DislocationInverter(object):
                     receiver_coords,
                     lambda_mean,
                     mu_mean,
-                    nthreads)
+                    nthreads=nthreads,
+                    rotate_sdn=rotate_sdn)
 
                 eps = \
                     0.5 * (
@@ -369,25 +367,7 @@ class DislocationInverter(object):
                         results[:, (3, 6, 9, 4, 7, 10, 5, 8, 11)])
 
                 dilatation = num.sum(eps[:, diag_ind], axis=1)[:, num.newaxis]
-
-                # TODO: Why dilatation+2?
-                stress_ned = kron * lambda_mean * dilatation+2. * mu_mean * eps
-                rotmat = ned2sdn_rotmat(
-                    source_patches_list[isource].strike,
-                    source_patches_list[isource].dip)
-
-                if path is None:
-                    path = num.einsum_path(
-                        'ij,...jk,lk->...il',
-                        rotmat, stress_ned.reshape(npoints, 3, 3), rotmat,
-                        optimize='greedy')[0]
-
-                stress_sdn = num.einsum(
-                    'ij,...jk,lk->...il',
-                    rotmat, stress_ned.reshape(npoints, 3, 3), rotmat,
-                    optimize=path)
-
-                stress_sdn = stress_sdn.reshape(npoints, 9)
+                stress_sdn = kron * lambda_mean * dilatation+2. * mu_mean * eps
 
                 coefmat[0::3, isource * 3 + idisl] = -stress_sdn[:, 2].ravel()
                 coefmat[1::3, isource * 3 + idisl] = -stress_sdn[:, 5].ravel()
@@ -398,7 +378,8 @@ class DislocationInverter(object):
         return coefmat / unit_disl
 
     @staticmethod
-    def get_coef_mat_slow(source_patches_list, pure_shear=False):
+    def get_coef_mat_slow(source_patches_list, pure_shear=False,
+                          rotate_sdn=True, nthreads=1):
         '''
         Build coefficient matrix for given source_patches (Slow version)
 
@@ -473,7 +454,8 @@ class DislocationInverter(object):
                     receiver_coords,
                     lambda_mean,
                     shearmod_mean,
-                    0)
+                    nthreads=nthreads,
+                    rotate_sdn=rotate_sdn)
 
                 for irec in range(receiver_coords.shape[0]):
                     eps = num.zeros((3, 3))
@@ -483,33 +465,26 @@ class DislocationInverter(object):
                                 results[irec][m * 3 + n + 3] +
                                 results[irec][n * 3 + m + 3])
 
-                    stress_tens = num.zeros((3, 3))
+                    stress = num.zeros((3, 3))
                     dilatation = num.sum([eps[i, i] for i in range(3)])
 
                     for m, n in zip([0, 0, 0, 1, 1, 2], [0, 1, 2, 1, 2, 2]):
                         if m == n:
-                            stress_tens[m, n] = \
+                            stress[m, n] = \
                                 lambda_mean * \
                                 dilatation + \
                                 2. * shearmod_mean * \
                                 eps[m, n]
 
                         else:
-                            stress_tens[m, n] = \
+                            stress[m, n] = \
                                 2. * shearmod_mean * \
                                 eps[m, n]
-                            stress_tens[n, m] = stress_tens[m, n]
-
-                    rotmat = ned2sdn_rotmat(
-                        source_patches_list[isource].strike,
-                        source_patches_list[isource].dip)
-
-                    stress_sdn = num.dot(num.dot(
-                        rotmat, stress_tens), rotmat.T)
+                            stress[n, m] = stress[m, n]
 
                     normal = num.array([0., 0., -1.])
                     for isig in range(3):
-                        tension = num.sum(stress_sdn[isig, :] * normal)
+                        tension = num.sum(stress[isig, :] * normal)
                         coefmat[irec * n_eq + isig, isource * n_eq + idisl] = \
                             tension / unit_disl
 
