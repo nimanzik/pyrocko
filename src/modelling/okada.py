@@ -3,7 +3,6 @@
 # The Pyrocko Developers, 21st Century
 # ---|P------/S----------~Lg----------
 import numpy as num
-import time
 import logging
 
 from pyrocko import moment_tensor as mt
@@ -626,7 +625,7 @@ class DislocationInverter(object):
             coef_mat = DislocationInverter.get_coef_mat(
                 source_list, pure_shear=pure_shear, **kwargs)
 
-        idx = num.arange(0, coef_mat.shape[0], 1)
+        idx = num.arange(0, coef_mat.shape[0])
         if pure_shear:
             idx = idx[idx % 3 != 2]
 
@@ -636,13 +635,11 @@ class DislocationInverter(object):
         if stress_field.ndim == 2:
             stress_field = stress_field.ravel()
 
-        if coef_mat_in is not None:
-            if stress_field[idx].shape[0] == coef_mat_in.shape[0]:
-                disloc_est[idx] = num.linalg.multi_dot([num.linalg.inv(
-                    num.dot(coef_mat_in.T, coef_mat_in)),
-                    coef_mat_in.T,
-                    stress_field[idx]])
-                return disloc_est.ravel()
+        disloc_est[idx] = num.linalg.multi_dot([num.linalg.inv(
+            num.dot(coef_mat_in.T, coef_mat_in)),
+            coef_mat_in.T,
+            stress_field[idx]])
+        return disloc_est.ravel()
 
 
 __all__ = [

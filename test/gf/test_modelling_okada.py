@@ -119,8 +119,8 @@ class OkadaTestCase(unittest.TestCase):
             assert num.all(vals > 0.) or num.all(vals < 0.)
 
     def test_okada_inv_benchmark(self):
-        nlength = 40
-        nwidth = 10
+        nlength = 25
+        nwidth = 25
 
         al1 = -40.
         al2 = -al1
@@ -144,18 +144,19 @@ class OkadaTestCase(unittest.TestCase):
         @benchmark.labeled('okada_inv')
         def calc():
             return DislocationInverter.get_coef_mat(
-                source_disc, nthreads=3)
+                source_disc, nthreads=0)
 
         @benchmark.labeled('okada_inv_bulk')
         def calc_bulk():
             return DislocationInverter.get_coef_mat_bulk(
-                source_disc, nthreads=3)
+                source_disc, nthreads=0)
 
         @benchmark.labeled('okada_slow')
         def calc_slow():
             return DislocationInverter.get_coef_mat_slow(
-                source_disc, nthreads=3)
+                source_disc, nthreads=0)
 
+        res1 = calc()
         res1 = calc()
         res2 = calc_bulk()
         res3 = calc_slow()
@@ -352,8 +353,8 @@ class OkadaTestCase(unittest.TestCase):
         ref_east = 0.
         ref_depth = 100000.
 
-        nlength = 20
-        nwidth = 16
+        nlength = 10
+        nwidth = 10
 
         strike = 0.
         dip = 90.
@@ -381,7 +382,7 @@ class OkadaTestCase(unittest.TestCase):
         receiver_coords = num.array([
             src.source_patch()[:3] for src in source_list])
 
-        pure_shear = False
+        pure_shear = True
         if pure_shear:
             n_eq = 2
         else:
@@ -389,7 +390,7 @@ class OkadaTestCase(unittest.TestCase):
 
         gf = DislocationInverter.get_coef_mat(
             source_list, pure_shear=pure_shear)
-        gf2 = DislocationInverter.get_coef_mat_slow(
+        gf2 = DislocationInverter.get_coef_mat_bulk(
             source_list, pure_shear=pure_shear)
 
         assert num.linalg.slogdet(num.dot(gf.T, gf)) != (0., num.inf)
@@ -400,15 +401,19 @@ class OkadaTestCase(unittest.TestCase):
         dstress = -1.5e6
         stress_comp = 1
 
-        stress = num.full(nlength * nwidth * n_eq, dstress)
+        stress = num.full(nlength * nwidth * 3, dstress)
         for iw in range(nwidth):
             for il in range(nlength):
                 idx = iw * nlength + il
                 if (il > 2 and il < 10) and (iw > 2 and iw < 12):
-                    stress[idx * n_eq + stress_comp] = dstress / 4.
+                    stress[idx * 3 + stress_comp] = dstress / 4.
 
-        disloc_est = DislocationInverter.get_disloc_lsq(
-            stress, coef_mat=gf)
+        @benchmark.labeled('lsq')
+        def lsq():
+            return DislocationInverter.get_disloc_lsq(
+                stress, coef_mat=gf, pure_shear=pure_shear)
+
+        disloc_est = lsq()
 
         if show_plot:
             import matplotlib.pyplot as plt
@@ -443,6 +448,8 @@ class OkadaTestCase(unittest.TestCase):
                     fig, n_eq + 1, 4, [i for i in param[2::n_eq]],
                     '$u_{opening}$', vmin=vmin, vmax=vmax)
             plt.show()
+
+        print(benchmark)
 
     def test_okada_vs_griffith_inf2d(self):
         from pyrocko.modelling import GriffithCrack

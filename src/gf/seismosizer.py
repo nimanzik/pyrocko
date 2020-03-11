@@ -2248,6 +2248,10 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         optional=True,
         help='moment magnitude Mw as in [Hanks and Kanamori, 1979]')
 
+    slip = Float.T(
+        optional=True,
+        help='Maximum slip of the rectangular source [m]')
+
     strike = Float.T(
         default=0.0,
         help='strike direction in [deg], measured clockwise from north')
@@ -2280,12 +2284,12 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
              'bottom_right, center_left and center right')
 
     nucleation_x = Float.T(
-        optional=True,
+        default=0.,
         help='horizontal position of rupture nucleation in normalized fault '
              'plane coordinates (-1 = left edge, +1 = right edge)')
 
     nucleation_y = Float.T(
-        optional=True,
+        default=0.,
         help='down-dip position of rupture nucleation in normalized fault '
              'plane coordinates (-1 = upper edge, +1 = lower edge)')
 
@@ -2322,7 +2326,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         dtype=num.float,
         shape=(None,))
 
-    eikonal_factor = Int.T(
+    eikonal_decimation = Int.T(
         optional=True,
         default=1,
         help='Sub-source eikonal factor, a smaller eikonal factor will'
@@ -2479,7 +2483,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         vs_min = store.config.earthmodel_1d.min(get='vs')
 
-        delta = self.eikonal_factor * num.min([
+        delta = self.eikonal_decimation * num.min([
             num.min(store.config.deltat * vs_min / 2.),
             num.min(store.config.deltas)])
 
@@ -2507,7 +2511,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             points_y=points_xy[:, 1],
             **kwargs), points_xy
 
-    def _discretize_vr(self, store, target=None, points=None):
+    def _discretize_rupture_v(self, store, target=None, points=None):
         '''
         Get rupture velocity for discrete points on source plane
 
@@ -2576,7 +2580,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             store,
             cs='xyz')
 
-        vr = self._discretize_vr(
+        vr = self._discretize_rupture_v(
             store=store, target=target, points=points).reshape(ny, nx)
 
         def initialize_times(nucl_times=None):
@@ -2754,11 +2758,24 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             logger.warn(
                 'No linear coefficients found. Calculation for given patches')
 
-        if self.tractions is None:
-            self.tractions = num.ones((self.nx * self.ny * 3,))
+        if isinstance(self.tractions, float):
+            logger.info('Assuming uniform traction %.1f Pa', self.tractions)
+            self.tractions = num.full((self.nx * self.ny * 3,), self.tractions)
+
+        elif isinstance(self.tractions, tuple):
+            assert len(self.tractions) == 3
+            logger.info('Assuming anisotrop traction'
+                        ' strike %.1f, dip %.1f. tensile%.1f Pa',
+                        *self.tractions)
+            self.tractions = num.tile(self.tractions, self.nx*self.ny)
+
+        elif self.tractions is None:
             logger.warn(
                 'No traction field given.'
-                'Assumed uniform traction field (tx, ty, tz) = (1., 1., 1.) Pa')
+                'Assumed uniform traction 1.0 Pa')
+            self.tractions = num.full((self.nx * self.ny * 3,), 1.)
+
+        self.get_moment_rate(store)
 
         npoints = self.nx * self.ny
 
@@ -2893,7 +2910,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             self.calc_coef_mat()
 
         if self.tractions.shape == tuple((self.coef_mat.shape[0], )):
-            self.tractions.reshape(-1, 1)
+            self.tractions.ravel()
         elif self.tractions.shape != tuple((self.coef_mat.shape[0], 1)):
             raise TypeError(
                 'The traction vector is of invalid shape.'
@@ -2946,17 +2963,18 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 'Please give a GF store or manually set the time interval dt.')
 
         times = self.get_patch_attribute('time')
-        t_min, t_max = num.min(times), num.max(times)
-        calc_times = num.arange(t_min, t_max + dt, dt)
+        calc_times = num.arange(times.min(), times.max() + dt, dt)
 
         delta_disloc_est = num.zeros((
             self.nx * self.ny * 3, calc_times.shape[0]))
 
         for itime, t in enumerate(calc_times[1:]):
-            delta_disloc_est[:, itime + 1] = self.get_okada_slip(
+            delta_disloc_est[:, itime+1] = self.get_okada_slip(
                 t=t - self.time,
-                *args, **kwargs).flatten() - num.sum(
-                    delta_disloc_est[:, :itime+1], axis=1)
+                *args, **kwargs).flatten()
+        # old: - delta_disloc_est[:, :itime+1].sum(axis=1)
+
+        delta_disloc_est = num.gradient(delta_disloc_est, axis=1)
 
         return delta_disloc_est, calc_times
 
@@ -2982,7 +3000,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         slip_change = num.sqrt(num.array(
             [[num.sum(
-                ddisloc_est[i * 3:i * 3 + 3, j]**2.)
+                ddisloc_est[i*3:i*3+3, j]**2.)
                 for j in range(ddisloc_est.shape[1])]
                 for i in range(int(ddisloc_est.shape[0] / 3.))])) / dt
 
