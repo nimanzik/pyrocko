@@ -56,11 +56,16 @@ class ISC(EarthquakeCatalog):
             latmin=-90.,
             latmax=90.,
             lonmin=-180.,
-            lonmax=180.):
+            lonmax=180.,
+            include_fm=True):
         p = []
         a = p.append
 
-        a('out_format=CATQuakeML')
+        if include_fm:
+            a('out_format=FMQuakeML')
+        else:
+            a('out_format=CATQuakeML')
+
         a('request=REVIEWED')
         a('searchshape=RECT')
 
@@ -75,6 +80,10 @@ class ISC(EarthquakeCatalog):
         a('top_lat=%g' % latmax)
         a('left_lon=%g' % lonmin)
         a('right_lon=%g' % lonmax)
+
+        if include_fm:
+            a('req_fm_agcy=Any')
+
         url = 'http://www.isc.ac.uk/cgi-bin/web-db-v4?' + '&'.join(p)
 
         logger.debug('Opening URL: %s' % url)

@@ -430,16 +430,19 @@ class MomentTensor(Object):
     creation_info = CreationInfo.T(optional=True)
 
     def pyrocko_moment_tensor(self):
-        mrr = self.tensor.mrr.value
-        mtt = self.tensor.mtt.value
-        mpp = self.tensor.mpp.value
-        mrt = self.tensor.mrt.value
-        mrp = self.tensor.mrp.value
-        mtp = self.tensor.mtp.value
-        mt = moment_tensor.MomentTensor(m_up_south_east=num.matrix([
-             [mrr, mrt, mrp], [mrt, mtt, mtp], [mrp, mtp, mpp]]))
+        try:
+            mrr = self.tensor.mrr.value
+            mtt = self.tensor.mtt.value
+            mpp = self.tensor.mpp.value
+            mrt = self.tensor.mrt.value
+            mrp = self.tensor.mrp.value
+            mtp = self.tensor.mtp.value
+            mt = moment_tensor.MomentTensor(m_up_south_east=num.matrix([
+                 [mrr, mrt, mrp], [mrt, mtt, mtp], [mrp, mtp, mpp]]))
 
-        return mt
+            return mt
+        except AttributeError:
+            return None
 
 
 class Amplitude(Object):
@@ -669,7 +672,13 @@ class Event(Object):
         '''
 
         if not self.preferred_origin:
-            raise NoPreferredOriginSet()
+            logger.warn(
+                'Event %s: No preferred origin set, '
+                'using first' % self.public_id)
+
+            self.preferred_origin_id = self.origin_list[0].public_id
+
+            # raise NoPreferredOriginSet()
 
         ev = self.preferred_origin.pyrocko_event()
 
@@ -757,7 +766,9 @@ class QuakeML(Object):
         '''Extract a list of :py:class:`pyrocko.model.Event` instances'''
         events = []
         for e in self.event_parameters.event_list:
-            events.append(e.pyrocko_event())
+            ev = e.pyrocko_event()
+            if ev is not None:
+                events.append(ev)
 
         return events
 
