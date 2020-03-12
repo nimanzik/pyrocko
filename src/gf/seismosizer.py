@@ -12,6 +12,7 @@ import os
 import re
 import logging
 import resource
+from hashlib import sha1
 
 import numpy as num
 from scipy.interpolate import RegularGridInterpolator
@@ -1225,6 +1226,12 @@ class Source(Location, Cloneable):
                     north_shifts=arr(self.north_shift),
                     east_shifts=arr(self.east_shift),
                     depths=arr(self.depth))
+
+    def _hash(self):
+        sha = sha1()
+        for k in self.base_key():
+            sha.update(str(k).encode())
+        return sha.hexdigest()
 
     def _dparams_base_repeated(self, times):
         if times is None:
@@ -2678,17 +2685,16 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         cfg_args = [
             self.lat,
             self.lon,
-            num.array([
-                self.north_shift, self.east_shift, self.depth]).reshape(-1, 3)]
-        cfg_kwargs = {'interpolation': interpolation}
+            num.array([[self.north_shift, self.east_shift, self.depth]])]
 
-        def get_lame(config, *args, **kwargs):
-            shear_mod = config.get_shear_moduli(*args, **kwargs)
-            lamb = config.get_vp(*args, **kwargs)**2 \
-                * config.get_rho(*args, **kwargs) - 2.*shear_mod
+        def get_lame(*args, **kwargs):
+            shear_mod = store.config.get_shear_moduli(*args, **kwargs)
+            lamb = store.config.get_vp(*args, **kwargs)**2 \
+                * store.config.get_rho(*args, **kwargs) - 2.*shear_mod
             return shear_mod, lamb / (2. * (lamb + shear_mod))
 
-        shear_mod, poisson = get_lame(store.config, *cfg_args, **cfg_kwargs)
+        shear_mod, poisson = get_lame(
+            *cfg_args, interpolation=interpolation)
 
         okada_src = OkadaSource(
             lat=self.lat, lon=self.lon,
@@ -2712,13 +2718,12 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         cfg_args = [
             self.lat,
             self.lon,
-            num.array([source.source_patch()[:3] for source in source_disc])]
-        shear_mod, poisson = get_lame(store.config, *cfg_args, **cfg_kwargs)
+            num.array([src.source_patch()[:3] for src in source_disc])]
+        shear_mod, poisson = get_lame(
+            *cfg_args, interpolation=interpolation)
 
         if (self.nx, self.ny) != (nx, ny):
-            points = num.hstack((
-                    source_points[:, 0].ravel(),
-                    source_points[:, 1].ravel()))
+            points = num.hstack((source_points[:, 0], source_points[:, 1]))
 
             times_interp = time_interpolator(points)
             vr_interp = vr_interpolator(points)
@@ -2760,38 +2765,39 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         if isinstance(self.tractions, float):
             logger.info('Assuming uniform traction %.1f Pa', self.tractions)
-            self.tractions = num.full((self.nx * self.ny * 3,), self.tractions)
+            self.tractions = num.full((self.nx * self.ny, 3), self.tractions)
 
         elif isinstance(self.tractions, tuple):
             assert len(self.tractions) == 3
             logger.info('Assuming anisotrop traction'
                         ' strike %.1f, dip %.1f. tensile%.1f Pa',
                         *self.tractions)
-            self.tractions = num.tile(self.tractions, self.nx*self.ny)
+            self.tractions = num.tile(self.tractions, self.nx*self.ny)\
+                .reshape(-1, 3)
 
         elif self.tractions is None:
             logger.warn(
                 'No traction field given.'
                 'Assumed uniform traction 1.0 Pa')
-            self.tractions = num.full((self.nx * self.ny * 3,), 1.)
+            self.tractions = num.full((self.nx*self.ny, 3), 1.)
 
         self.get_moment_rate(store)
 
-        npoints = self.nx * self.ny
-
-        delta_slip, times = self.get_delta_slip(store=store)
+        delta_slip, times = self.get_delta_slip(store)
 
         nt = times.shape[0]
+        npoints = self.nx * self.ny
+
         times = num.tile(times, npoints)
 
         slip_shear = num.linalg.norm(
             num.vstack((
-                delta_slip[::3, :].ravel(),
+                delta_slip[0::3, :].ravel(),
                 delta_slip[1::3, :].ravel())),
             axis=0)
         slip_norm = delta_slip[2::3, :].ravel()
 
-        points = num.array([patch.source_patch()[:3] for patch in self.patches])
+        points = num.array([p.source_patch()[:3] for p in self.patches])
         points = num.tile(points, nt).reshape(-1, 3)
         patch_area = self.patches[0].area
 
@@ -2803,11 +2809,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         mu = num.mean(self.get_patch_attribute('shearmod'))
 
         def get_m6(strike, dip, rake, du_s, du_n):
-            strike = d2r*strike
-            dip = d2r*dip
-            rake = d2r*rake
-
-            rotmat = pmt.euler_to_matrix(dip, strike, -rake)
+            rotmat = pmt.euler_to_matrix(dip*d2r, strike*d2r, -rake*d2r)
             momentmat = num.matrix(
                 [[lamb * du_n, 0., -mu * du_s],
                  [0., lamb * du_n, 0.],
@@ -2844,33 +2846,29 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         Calculate linear coefficient relating tractions and dislocations on the
         fault patches
         '''
-
-        if self.patches:
-            self.coef_mat = DislocationInverter.get_coef_mat(self.patches)
-        else:
+        if not self.patches:
             raise ValueError(
                 'Source patches are needed. Please calculate them first.')
 
-    def get_patch_attribute(self, attribute):
+        self.coef_mat = DislocationInverter.get_coef_mat(self.patches)
+
+    def get_patch_attribute(self, attr):
         '''
         Get array of patch attributes
 
-        :param attribute: Attribute of fault patches which shall be listed for
+        :param attr: Attribute of fault patches which shall be listed for
             all patches in an array (possible attributes: check
             :py:class`pyrocko.modelling.okada.OkadaSource`)
-        :type attribute: str
+        :type attr: str
 
         :returns: Array of attribute values per fault patch
         :rtype: :py:class`numpy.ndarray`
 
         '''
-
-        if self.patches:
-            return num.array(
-                [getattr(patch, attribute) for patch in self.patches])
-        else:
+        if not self.patches:
             raise ValueError(
                 'Source patches are needed. Please calculate them first.')
+        return num.array([getattr(p, attr) for p in self.patches])
 
     def get_okada_slip(
             self,
@@ -2894,34 +2892,41 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             raise ValueError(
                 'Please discretize the source first (discretize_patches())')
 
-        times = self.get_patch_attribute('time') - self.time
-        boolean = (times <= t).flatten()
-        indices_source = num.array(range(boolean.shape[0]))[boolean]
-        disloc_est = num.zeros_like(self.tractions).reshape(-1,)
-
-        if indices_source.shape[0] == 0:
-            return disloc_est
-
-        indices_disl = num.array(
-            [num.arange(i * 3, i * 3 + 3, 1) for i in indices_source]
-            ).flatten()
-
         if self.coef_mat is None:
             self.calc_coef_mat()
 
-        if self.tractions.shape == tuple((self.coef_mat.shape[0], )):
-            self.tractions.ravel()
-        elif self.tractions.shape != tuple((self.coef_mat.shape[0], 1)):
+        if not self.tractions.shape[0] != tuple((self.coef_mat.shape[0], 1)):
             raise TypeError(
                 'The traction vector is of invalid shape.'
                 'The shape needed is: %i, 1' % self.coef_mat.shape[0])
 
-        disloc_est[indices_disl] = DislocationInverter.get_disloc_lsq(
-            stress_field=self.tractions[indices_disl],
-            coef_mat=self.coef_mat[indices_disl, :][:, indices_disl],
-            **kwargs).reshape(-1,)
+        times = self.get_patch_attribute('time') - self.time
+        boolean = (times <= t).flatten()
+        indices_source = num.array(range(boolean.shape[0]))[boolean]
+        relevant_sources = num.nonzero(boolean.size)[0]
+        print(indices_source, relevant_sources)
+        disloc_est = num.zeros_like(self.tractions)
 
-        return disloc_est
+        if not boolean.any():
+            return disloc_est
+
+        indices_disl = num.array(
+            [num.arange(i * 3, i * 3 + 3, 1) for i in relevant_sources]
+            ).flatten()
+
+        coef_src_idx = num.tile(relevant_sources, 3)
+        coef_src_idx[1::3] += 1
+        coef_src_idx[2::3] += 2
+
+        print(indices_disl, coef_src_idx)
+
+        disloc_est[relevant_sources] = DislocationInverter.get_disloc_lsq(
+            stress_field=self.tractions[relevant_sources, :].ravel(),
+            coef_mat=self.coef_mat[coef_src_idx, :][:, coef_src_idx],
+            **kwargs)
+        print('disloc', disloc_est.shape)
+
+        return disloc_est.ravel()
 
     def get_delta_slip(self, store=None, dt=None, *args, **kwargs):
         '''
@@ -2951,7 +2956,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         '''
 
         if store and dt:
-            raise ValueError(
+            raise AttributeError(
                 'Argument collision.'
                 'Please define only the store or the dt argument.')
 
@@ -2959,7 +2964,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             dt = store.config.deltat
 
         if not dt:
-            raise ValueError(
+            raise AttributeError(
                 'Please give a GF store or manually set the time interval dt.')
 
         times = self.get_patch_attribute('time')

@@ -616,9 +616,10 @@ class DislocationInverter(object):
 
         :return: inverted displacements (u_strike, u_dip , u_tensile) for each
             source patch. order: [
-            patch1 u_Strike, patch1 u_Dip, patch1 u_Tensile,
-            patch2 u_Strike, ...]
-        :rtype: :py:class:`numpy.ndarray`, ``(n_sources * 3, 1)``
+            [patch1 u_Strike, patch1 u_Dip, patch1 u_Tensile],
+            [patch2 u_Strike, patch2 u_Dip, patch2 u_Tensile],
+            ...]
+        :rtype: :py:class:`numpy.ndarray`, ``(n_sources, 3)``
         '''
 
         if source_list is not None and coef_mat is None:
@@ -639,7 +640,7 @@ class DislocationInverter(object):
             num.dot(coef_mat_in.T, coef_mat_in)),
             coef_mat_in.T,
             stress_field[idx]])
-        return disloc_est.ravel()
+        return disloc_est
 
 
 __all__ = [
