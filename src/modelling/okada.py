@@ -91,11 +91,11 @@ class AnalyticalRectangularSource(AnalyticalSource):
 
     @property
     def length(self):
-        return num.sum(num.abs([self.al1, self.al2]))
+        return abs(-self.al1 + self.al2)
 
     @property
     def width(self):
-        return num.sum(num.abs([self.aw1, self.aw2]))
+        return abs(-self.aw1 + self.aw2)
 
     @property
     def area(self):
@@ -159,7 +159,7 @@ class OkadaSource(AnalyticalRectangularSource):
         if self.shearmod:
             mu = self.shearmod
         elif self.poisson:
-            self.shearmod = (8. * (1 + self.poisson)) / (1. - 2 * self.poisson)
+            self.shearmod = (8. * (1. + self.poisson)) / (1. - 2*self.poisson)
             mu = self.shearmod
         else:
             raise ValueError(
@@ -183,8 +183,7 @@ class OkadaSource(AnalyticalRectangularSource):
         :returns: Moment magnitude
         :rtype: float
         '''
-
-        return 2. / 3 * num.log10(self.seismic_moment * 1e7) - 10.7
+        return mt.moment_to_magnitude(self.seismic_moment)
 
     def source_patch(self):
         '''
@@ -237,8 +236,8 @@ class OkadaSource(AnalyticalRectangularSource):
         assert nlength > 0
         assert nwidth > 0
 
-        il = num.tile(num.arange(0, nlength, 1), nwidth)
-        iw = num.repeat(num.arange(0, nwidth, 1), nlength)
+        il = num.tile(num.arange(nlength), nwidth)
+        iw = num.repeat(num.arange(nwidth), nlength)
 
         patch_length = self.length / nlength
         patch_width = self.width / nwidth
@@ -256,7 +255,7 @@ class OkadaSource(AnalyticalRectangularSource):
         source_points[:, 1] -= self.aw2
 
         rotmat = num.asarray(
-            mt.euler_to_matrix(self.dip * d2r, self.strike * d2r, 0.0))
+            mt.euler_to_matrix(self.dip * d2r, self.strike * d2r, 0.))
 
         source_points_rot = num.dot(rotmat.T, source_points.T).T
         source_points_rot[:, 0] += self.northing

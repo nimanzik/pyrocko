@@ -23,36 +23,42 @@ if not op.exists(store_id_dynamic):
 engine = gf.LocalEngine(store_superdirs=['.'])
 store = engine.get_store(store_id)
 
-strike = 45.
+strike = 0.
 dip = 90.
-dep = 2.5*km
-leng = 3*km
-wid = 3*km
-slip = .5
+dep = .5*km
+leng = 2*km
+wid = 2*km
 
 source_params = dict(
-    north_shift=0.,
-    east_shift=0.,
+    north_shift=2*km,
+    east_shift=2*km,
     depth=dep,
     width=wid,
     length=leng,
     dip=dip,
     strike=strike,
-    moment=1e10)
+    slip=6.,
+    anchor='top')
 
 dyn_rupture = gf.PseudoDynamicRupture(
-    nx=5, ny=5, tractions=(1.e4, 1.e4, 0.),
+    nx=1, ny=1,
+    tractions=(1.e4, 0.e4, 0.),
     **source_params)
 
 dyn_rupture.ensure_tractions()
 dyn_rupture.discretize_patches(store)
 slip = dyn_rupture.get_okada_slip()
-rake = num.arctan2(slip[:, 1].mean(), slip[:, 1].mean())
+rake = num.arctan2(slip[:, 1].mean(), slip[:, 0].mean())
+print('rake', float(rake*d2r))
 
+
+depths = dyn_rupture.get_patch_attribute('depth')
 rect_rupture = gf.RectangularSource(
     rake=float(rake*d2r),
     **source_params)
 
+print(dyn_rupture.discretize_basesource(store))
+print(rect_rupture.discretize_basesource(store))
 # Define a grid of targets
 # number in east and north directions
 ngrid = 40
@@ -96,9 +102,13 @@ N = targets_static[0].coords5[:, 2]
 E = targets_static[0].coords5[:, 3]
 synth_disp_dyn = result.results_list[0][0].result
 
+
 down_rect = synth_disp_rect['displacement.d']
 down_dyn = synth_disp_dyn['displacement.d']
 down_diff = down_rect - down_dyn
+
+print('rect', down_rect.max())
+print('dyn', down_dyn.max())
 
 fig, axes = plt.subplots(3, 1)
 
