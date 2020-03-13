@@ -640,7 +640,7 @@ class DislocationInverter(object):
             num.dot(coef_mat_in.T, coef_mat_in)),
             coef_mat_in.T,
             stress_field[idx]])
-        return disloc_est
+        return disloc_est.reshape(-1, 3)
 
 
 __all__ = [
