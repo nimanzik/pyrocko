@@ -2251,14 +2251,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
     discretized_source_class = meta.DiscretizedMTSource
 
-    magnitude = Float.T(
-        optional=True,
-        help='moment magnitude Mw as in [Hanks and Kanamori, 1979]')
-
-    slip = Float.T(
-        optional=True,
-        help='Maximum slip of the rectangular source [m]')
-
     strike = Float.T(
         default=0.0,
         help='strike direction in [deg], measured clockwise from north')
@@ -2296,16 +2288,30 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
     gamma = Float.T(
         default=0.8,
-        help='Scaling factor between S wave velocity and rupture velocity: '
+        help='scaling factor between S wave velocity and rupture velocity: '
              'v_r = gamma * v_s')
 
     nx = Int.T(
-        help='Number of discrete source patches in x direction (along strike)',
+        help='number of discrete source patches in x direction (along strike)',
         optional=True)
 
     ny = Int.T(
-        help='Number of discrete source patches in y direction (down dip)',
+        help='number of discrete source patches in y direction (down dip)',
         optional=True)
+
+    magnitude = Float.T(
+        optional=True,
+        help='moment magnitude Mw as in [Hanks and Kanamori, 1979]'
+             'Setting the moment magnitude the tractions/stress field'
+             'will be normalized to accomodate the desired moment magnitude.'
+             'Mutually exclusive with the slip parameter.')
+
+    slip = Float.T(
+        optional=True,
+        help='maximum slip of the rectangular source [m]'
+             'Setting the moment magnitude the tractions/stress field'
+             'will be normalized to accomodate the desired maximum slip.'
+             'Mutually exclusive with the magnitude parameter.')
 
     patches = List.T(
         OkadaSource.T(),
@@ -2314,10 +2320,17 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
     tractions = Array.T(
         optional=True,
-        help='Array of traction vectors [Pa] per source patch (size = nx*ny*3)'
+        help='Stress field the source is exposed to in [Pa].'
+             'Float will initialize an isotrop stress field for'
+             ' sigma_strike, sigma_dip, sigma_normal.'
+             'Tuple of (sigma_strike, sigma_dip, sigma_normal) will initialize'
+             ' a homogenous stress field for all patches.'
+             'Array of traction vectors per source patch (size = nx*ny, 3)'
              ' source patch (order: ['
-             ' src1 dstress_Strike, src1 dstress_Dip, src1 dstress_Tensile,'
-             ' src2 dstress_Strike, ...])',
+             ' [src1 dstress_Strike, src1 dstress_Dip, src1 dstress_Tensile],'
+             ' [src2 dstress_Strike, ...]])'
+             'When parameters magnitude or slip are set, tractions will be'
+             'normalized to accomodate the desired energy release.',
         dtype=num.float,
         shape=(None,))
 
@@ -2348,6 +2361,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 kwargs['magnitude'] = float(pmt.moment_to_magnitude(mom))
 
         SourceWithDerivedMagnitude.__init__(self, **kwargs)
+        self.check_conflicts()
 
     def base_key(self):
         return SourceWithDerivedMagnitude.base_key(self) + (
@@ -2364,7 +2378,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
     def check_conflicts(self):
         if self.magnitude is not None and self.slip is not None:
             raise DerivedMagnitudeError(
-                'magnitude and slip are both defined')
+                'definition of slip and magnitude are mutually exclusive')
 
     def get_magnitude(self, store=None, target=None):
         self.check_conflicts()
@@ -2777,15 +2791,20 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         slip_strike = delta_slip[:, 0::3, :].squeeze()
         slip_dip = delta_slip[:, 1::3, :].squeeze()
         slip_norm = delta_slip[:, 2::3, :].squeeze()
-        slip_shear = num.sqrt(slip_strike**2 + slip_dip**2)
 
+        slip_shear = num.sqrt(slip_strike**2 + slip_dip**2)
         slip_rake = num.arctan2(slip_dip, slip_strike)
-        slip_rake[num.isnan(slip_rake)] = 0.
+
+        if self.slip is not None:
+            norm = num.linalg.norm(delta_slip.sum(axis=2), axis=1).max()
+            slip_shear *= self.slip / norm
+            slip_norm *= self.slip / norm
 
         patch_area = self.patches[0].area
         strikes = self.get_patch_attribute('strike')
         dips = self.get_patch_attribute('dip')
 
+        # Can we use the store's lambda and mu here?
         lamb = num.mean(self.get_patch_attribute('lamb'))
         mu = num.mean(self.get_patch_attribute('shearmod'))
 
@@ -2805,6 +2824,16 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 du_s=slip_shear[ip, it], du_n=slip_norm[ip, it])
             for ip in range(npatches)
             for it in range(ntimes)]).reshape(-1, 6)
+
+        if self.magnitude is not None:
+            moment = pmt.magnitude_to_moment(self.magnitude)
+            patch_moments = num.array(
+                [num.linalg.norm(
+                    num.linalg.eigvalsh(
+                        pmt.symmat6(*m6)))
+                 for m6 in m6s]) / num.sqrt(2.)
+            patch_norm = patch_moments.sum()
+            m6s *= moment / patch_norm
 
         dl = num.abs([self.patches[0].al1, self.patches[0].al2]).sum()
         dw = num.abs([self.patches[0].aw1, self.patches[0].aw2]).sum()
