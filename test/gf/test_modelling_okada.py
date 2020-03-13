@@ -498,7 +498,8 @@ class OkadaTestCase(unittest.TestCase):
             shearmod=mu, poisson=poisson) for coords in source_coords]
 
         gf = DislocationInverter.get_coef_mat(source_list, pure_shear=False)
-        disloc_est = DislocationInverter.get_disloc_lsq(stress, coef_mat=gf)
+        disloc_est = DislocationInverter.get_disloc_lsq(stress, coef_mat=gf)\
+            .ravel()
 
         stressdrop = num.zeros(3, )
         stressdrop[stress_comp] = dstress
@@ -608,7 +609,7 @@ class OkadaTestCase(unittest.TestCase):
 
         gf = DislocationInverter.get_coef_mat(source_list, pure_shear=False)
         disloc_est = DislocationInverter.get_disloc_lsq(
-            stress, coef_mat=gf)
+            stress, coef_mat=gf).ravel()
 
         stressdrop = num.zeros(3, )
         stressdrop[2] = dstress
