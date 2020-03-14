@@ -2299,12 +2299,10 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
              'v_r = gamma * v_s')
 
     nx = Int.T(
-        help='number of discrete source patches in x direction (along strike)',
-        optional=True)
+        help='number of discrete source patches in x direction (along strike)')
 
     ny = Int.T(
-        help='number of discrete source patches in y direction (down dip)',
-        optional=True)
+        help='number of discrete source patches in y direction (down dip)')
 
     magnitude = Float.T(
         optional=True,
@@ -2767,11 +2765,8 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         '''
 
         if self.patches is None:
-            factor = 10.
-            self.discretize_patches(store, factor=factor)
-            logger.warn(
-                'No patches found. Discretized source for factor = %.g',
-                factor)
+            self.discretize_patches(store)
+            logger.warn('No patches found. Discretized source for factor')
 
         if self.coef_mat is None:
             self.calc_coef_mat()
@@ -2784,7 +2779,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         ntimes = times.size
         npatches = self.nx * self.ny
 
-        times = num.tile(times, npatches)
+        times = num.tile(times, npatches).reshape(npatches, -1)
 
         slip_strike = delta_slip[:, 0::3, :].squeeze(axis=1)
         slip_dip = delta_slip[:, 1::3, :].squeeze(axis=1)
@@ -2802,7 +2797,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         strikes = self.get_patch_attribute('strike')
         dips = self.get_patch_attribute('dip')
 
-        # Can we use the store's lambda and mu here?
+        # TODO: Can we use the store's lambda and mu here?
         lamb = num.mean(self.get_patch_attribute('lamb'))
         mu = num.mean(self.get_patch_attribute('shearmod'))
 
@@ -2824,11 +2819,12 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         if self.magnitude is not None:
             moment = pmt.magnitude_to_moment(self.magnitude)
-            p_moments = num.array(
+            # TODO: can we get the patch moment cheaper from patch2m6?
+            patch_mom = num.array(
                 [num.linalg.eigvalsh(pmt.symmat6(*m6))
                  for m6 in m6s.reshape(-1, 6)])
-            p_moments = num.linalg.norm(p_moments, axis=1) / num.sqrt(2.)
-            m6s *= moment / p_moments.sum()
+            patch_mom = num.linalg.norm(patch_mom, axis=1) / num.sqrt(2.)
+            m6s *= moment / patch_mom.sum()
 
         # Projection onto GFStore spacing
         gf_patches = []
@@ -2845,11 +2841,11 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         gf_patch_npoints = num.array(
             [gf_patch.shape[0] for gf_patch in gf_patches], dtype=num.intp)
 
-        m6s /= gf_patch_npoints
+        m6s /= gf_patch_npoints[:, num.newaxis, num.newaxis]
         m6s = m6s.repeat(gf_patch_npoints, axis=0)
 
         gf_points = num.array(gf_patches).reshape(-1, 3).repeat(ntimes, axis=0)
-        times = times.repeat(gf_points.shape[0])
+        times = times.repeat(gf_patch_npoints, axis=0)
 
         dl = num.abs([self.patches[0].al1, self.patches[0].al2]).sum()
         dw = num.abs([self.patches[0].aw1, self.patches[0].aw2]).sum()
@@ -2857,7 +2853,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         ds = meta.DiscretizedMTSource(
             lat=self.lat,
             lon=self.lon,
-            times=times,
+            times=times.ravel(),
             north_shifts=gf_points[:, 0],
             east_shifts=gf_points[:, 1],
             depths=gf_points[:, 2],

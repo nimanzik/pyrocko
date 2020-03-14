@@ -37,11 +37,11 @@ source_params = dict(
     length=leng,
     dip=dip,
     strike=strike,
-    slip=6.,
+    magnitude=6.,
     anchor='top')
 
 dyn_rupture = gf.PseudoDynamicRupture(
-    nx=1, ny=1,
+    nx=2, ny=2,
     tractions=(1.e4, 0.e4, 0.),
     **source_params)
 
@@ -57,8 +57,6 @@ rect_rupture = gf.RectangularSource(
     rake=float(rake*d2r),
     **source_params)
 
-print(dyn_rupture.discretize_basesource(store))
-print(rect_rupture.discretize_basesource(store))
 # Define a grid of targets
 # number in east and north directions
 ngrid = 40
