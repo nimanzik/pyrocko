@@ -6,16 +6,26 @@ RUN apt-get upgrade -y
 # env requirements
 RUN apt-get install -y python-pip
 RUN apt-get install -y python3-pip
-RUN pip3 install twine
-RUN apt-get install -y wget
+RUN apt-get install -y wget curl
+RUN pip3 install twine stdeb
+
+# Install pyenv and dependencies
+sudo apt install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev curl
+curl -L https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer | bash
+ENV PATH="$HOME/.pyenv/bin:${PATH}"
+RUN pyenv install 3.5.0
+RUN pyenv install 3.6.0
+RUN pyenv install 3.7.0
+RUN pyenv install 3.8.0
 
 # linter requirements
 RUN pip3 install flake8
 
 # build requirements
 RUN apt-get install -y make git
-RUN apt-get install -y python-dev python-setuptools python-numpy-dev
-RUN apt-get install -y python3-dev python3-setuptools python3-numpy-dev
+RUN apt-get install -y debhelper
+RUN apt-get install -y python-dev ptython-all-dev python-setuptools python-numpy-dev
+RUN apt-get install -y python3-dev ptython3-all-dev python3-setuptools python3-numpy-dev deb
 
 # testing requirements
 RUN apt-get install -y xvfb libgles2-mesa
