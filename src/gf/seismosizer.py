@@ -2764,15 +2764,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         :rtype: :py:class:`pyrocko.gf.meta.DiscretizedMTSource`
         '''
 
-        if self.patches is None:
-            self.discretize_patches(store)
-            logger.warn('No patches found. Discretized source for factor')
-
-        if self.coef_mat is None:
-            self.calc_coef_mat()
-            logger.warn(
-                'No linear coefficients found. Calculation for given patches')
-
+        # TODO: make stateless
+        self.discretize_patches(store)
+        self.calc_coef_mat()
         self.ensure_tractions()
 
         delta_slip, times = self.get_delta_slip(store)
@@ -2829,7 +2823,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         # Projection onto GFStore spacing
         gf_patches = []
         for p in self.patches:
-            rect_points, dl, dw, nl, nw = discretize_rect_source(
+            rect_points, _, _, _, _ = discretize_rect_source(
                 store.config.deltas, store.config.deltat,
                 p.time, p.north_shift, p.east_shift, p.depth,
                 p.strike, p.dip, p.length, p.width,
@@ -2841,6 +2835,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         gf_patch_npoints = num.array(
             [gf_patch.shape[0] for gf_patch in gf_patches], dtype=num.intp)
 
+        # Scale moment tensors
         m6s /= gf_patch_npoints[:, num.newaxis, num.newaxis]
         m6s = m6s.repeat(gf_patch_npoints, axis=0)
 
