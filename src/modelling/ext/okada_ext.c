@@ -1078,9 +1078,12 @@ static PyObject* w_dc3d_flexi(PyObject *m, PyObject *args, PyObject *kwds) {
 
 
 static PyMethodDef okada_ext_methods[] = {
-    {"okada", (PyCFunctionWithKeywords) w_dc3d_flexi, METH_VARARGS | METH_KEYWORDS,
-     "Calculates the static displacement and its derivatives from Okada Source"},
-
+    {
+        "okada",
+        (PyCFunctionWithKeywords) w_dc3d_flexi,
+        METH_VARARGS | METH_KEYWORDS,
+        "Calculates the static displacement and its derivatives from Okada Source"
+    },
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 

@@ -144,17 +144,17 @@ class OkadaTestCase(unittest.TestCase):
         @benchmark.labeled('okada_inv')
         def calc():
             return DislocationInverter.get_coef_mat(
-                source_disc, nthreads=0)
+                source_disc, nthreads=1)
 
-        @benchmark.labeled('okada_inv_bulk')
+        @benchmark.labeled('okada_inv_single')
         def calc_bulk():
-            return DislocationInverter.get_coef_mat_bulk(
-                source_disc, nthreads=0)
+            return DislocationInverter.get_coef_mat_single(
+                source_disc, nthreads=1)
 
         @benchmark.labeled('okada_slow')
         def calc_slow():
             return DislocationInverter.get_coef_mat_slow(
-                source_disc, nthreads=0)
+                source_disc, nthreads=1)
 
         res1 = calc()
         res1 = calc()

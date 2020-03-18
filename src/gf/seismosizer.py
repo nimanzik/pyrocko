@@ -19,7 +19,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 from pyrocko.guts import (Object, Float, String, StringChoice, List,
                           Timestamp, Int, SObject, ArgumentError, Dict,
-                          ValidationError)
+                          ValidationError, Bool)
 from pyrocko.guts_array import Array
 
 from pyrocko import moment_tensor as pmt
@@ -2280,8 +2280,8 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         default='center',
         optional=True,
         help='Anchor point for positioning the plane, can be: top, center or'
-             'bottom and also top_left, top_right,bottom_left,'
-             'bottom_right, center_left and center right')
+             ' bottom and also top_left, top_right,bottom_left,'
+             ' bottom_right, center_left and center right')
 
     nucleation_x = Float.T(
         default=0.,
@@ -2359,6 +2359,18 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
              ' make the result inaccurate but shorten the necessary'
              ' computation time (use for testing puposes only).')
 
+    nthreads = Int.T(
+        optional=True,
+        default=1,
+        help='Number of threads for Okada forward modelling '
+             'and matrix inversion.'
+             'Note: for small/medium matrices 1 thread is most efficient!')
+
+    pure_shear = Bool.T(
+        optional=True,
+        default=False,
+        help='Calculate only shear tractions, and omit tensile tractions.')
+
     def __init__(self, **kwargs):
         if 'moment' in kwargs:
             mom = kwargs.pop('moment')
@@ -2378,7 +2390,8 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             self.nucleation_x,
             self.nucleation_y,
             self.decimation_factor,
-            self.anchor)
+            self.anchor,
+            self.pure_shear)
 
     def check_conflicts(self):
         if self.magnitude is not None and self.slip is not None:
@@ -2475,11 +2488,11 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         d = {}
         mt = ev.moment_tensor
         if mt:
+            # TODO: Add rake as expression of tension_strike / dip
             (strike, dip, rake), _ = mt.both_strike_dip_rake()
             d.update(
                 strike=float(strike),
                 dip=float(dip),
-                rake=float(rake),
                 magnitude=float(mt.moment_magnitude()))
 
         d.update(kwargs)
@@ -2518,19 +2531,16 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         ny += 1
 
         points_xy = num.empty((nx * ny, 2))
-        points_xy[:, 0] = num.tile(
-            num.linspace(-1., 1., nx),
-            ny)
-        points_xy[:, 1] = num.repeat(
-            num.linspace(-1., 1., ny),
-            nx)
+        points_xy[:, 0] = num.repeat(num.linspace(-1., 1., nx), ny)
+        points_xy[:, 1] = num.tile(num.linspace(-1., 1., ny), nx)
 
         return nx, ny, delta, self.points_on_source(
             points_x=points_xy[:, 0],
             points_y=points_xy[:, 1],
             **kwargs), points_xy
 
-    def _discretize_rupture_v(self, store, target=None, points=None):
+    def _discretize_rupture_v(self, store, interpolation='nearest_neighbor',
+                              points=None):
         '''
         Get rupture velocity for discrete points on source plane
 
@@ -2549,23 +2559,14 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         if points is None:
             _, _, _, points, _ = self._discretize_points(store, cs='xyz')
 
-        if target is not None:
-            interpolation = target.interpolation
-        else:
-            interpolation = 'nearest_neighbor'
-            logger.warn(
-                'no target information available, will use'
-                ' "nearest_neighbor" interpolation when extracting shear'
-                ' modulus from earth model')
-
         return store.config.get_vs(
-            self.lat,
-            self.lon,
+            self.lat, self.lon,
             points=points,
             interpolation=interpolation) * self.gamma
 
     def discretize_time(
-            self, store, target=None, times=None, *args, **kwargs):
+            self, store, interpolation='nearest_neighbor',
+            times=None, *args, **kwargs):
 
         '''
         Get rupture start time for discrete points on source plane
@@ -2591,11 +2592,10 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         '''
 
         nx, ny, delta, points, points_xy = self._discretize_points(
-            store,
-            cs='xyz')
+            store, cs='xyz')
 
-        vr = self._discretize_rupture_v(
-            store=store, target=target, points=points).reshape(ny, nx)
+        vr = self._discretize_rupture_v(store, interpolation, points)\
+            .reshape(nx, ny)
 
         def initialize_times(nucl_times=None):
             nucl_x, nucl_y = self.nucleation_x, self.nucleation_y
@@ -2606,12 +2606,11 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 nucl_y = num.array([nucl_y])
 
             if nucl_x.shape != nucl_y.shape:
-                logger.warn(
-                    'Nucleation coordinates have different shape. Check!')
+                logger.warn('nucleation coordinates have different shape.')
 
             dist_points = num.array([
                 num.linalg.norm(points_xy - num.array([x, y]), axis=1)
-                for x, y in zip(nucl_x, nucl_y)]).T
+                for x, y in zip(nucl_x, nucl_y)])
             nucl_indices = num.argmin(dist_points, axis=0)
 
             if nucl_times is None:
@@ -2623,18 +2622,19 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         if times is None:
             times = initialize_times(nucl_times=None)
-        elif times.shape != tuple((ny, nx)):
+        elif times.shape != tuple((nx, ny)):
             times = initialize_times(nucl_times=None)
             logger.warn(
-                'Given times are not in right shape. Therefore standard time '
-                'array is used.')
+                'Given times are not in right shape. Therefore standard time'
+                ' array is used.')
 
-        eikonal_ext.eikonal_solver_fmm_cartesian(vr, times, delta)
+        eikonal_ext.eikonal_solver_fmm_cartesian(
+            speeds=vr, times=times, delta=delta)
 
         return points, points_xy, vr, times
 
     def discretize_patches(
-            self, store, interpolation='multilinear', grid_shape=(),
+            self, store, interpolation='nearest_neighbor', grid_shape=(),
             *args, **kwargs):
 
         '''
@@ -2668,10 +2668,10 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         points_xy[:, 1] = (points_xy[:, 1] - anch_y) * self.width / 2.
 
         time_interpolator = RegularGridInterpolator(
-            (points_xy[:nx, 0], points_xy[::nx, 1]), times.T,
+            (points_xy[::nx, 0], points_xy[:nx, 1]), times,
             method=interp_map[interpolation])
         vr_interpolator = RegularGridInterpolator(
-            (points_xy[:nx, 0], points_xy[::nx, 1]), vr.T,
+            (points_xy[::nx, 0], points_xy[:nx, 1]), vr,
             method=interp_map[interpolation])
 
         al = self.length / 2.
@@ -2683,11 +2683,11 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         assert num.abs([al1, al2]).sum() == self.length
         assert num.abs([aw1, aw2]).sum() == self.width
 
-        def get_lame(*args, **kwargs):
-            shear_mod = store.config.get_shear_moduli(*args, **kwargs)
-            lamb = store.config.get_vp(*args, **kwargs)**2 \
-                * store.config.get_rho(*args, **kwargs) - 2.*shear_mod
-            return shear_mod, lamb / (2. * (lamb + shear_mod))
+        def get_lame(*a, **kw):
+            shear_mod = store.config.get_shear_moduli(*a, **kw)
+            lamb = store.config.get_vp(*a, **kw)**2 \
+                * store.config.get_rho(*a, **kw) - 2.*shear_mod
+            return shear_mod, lamb / (2. * (lamb+shear_mod))
 
         shear_mod, poisson = get_lame(
             self.lat, self.lon,
@@ -2740,19 +2740,15 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         elif isinstance(self.tractions, tuple):
             assert len(self.tractions) == 3
-            logger.info('Assuming anisotrop traction'
-                        ' strike %.1f, dip %.1f. tensile%.1f Pa',
-                        *self.tractions)
             self.tractions = num.tile(self.tractions, self.nx*self.ny)\
                 .reshape(-1, 3)
 
         elif self.tractions is None:
             logger.warn(
-                'No traction field given.'
-                'Assumed uniform traction 1.0 Pa')
+                'no traction field given, assuming uniform traction 1.0 Pa')
             self.tractions = num.full((self.nx*self.ny, 3), 1.)
 
-    def discretize_basesource(self, store, *args, **kwargs):
+    def discretize_basesource(self, store, target=None):
         '''
         Prepare source for synthetic waveform calculation
 
@@ -2763,9 +2759,12 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         :returns: Source discretized by a set of moment tensors and times
         :rtype: :py:class:`pyrocko.gf.meta.DiscretizedMTSource`
         '''
+        if not target:
+            interpolation = 'nearest_neighbor'
+        else:
+            interpolation = target.interpolation
 
-        # TODO: make stateless
-        self.discretize_patches(store)
+        self.discretize_patches(store, interpolation)
         self.calc_coef_mat()
         self.ensure_tractions()
 
@@ -2869,7 +2868,8 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             raise ValueError(
                 'Source patches are needed. Please calculate them first.')
 
-        self.coef_mat = DislocationInverter.get_coef_mat(self.patches)
+        self.coef_mat = DislocationInverter.get_coef_mat(
+            self.patches, nthreads=self.nthreads)
 
     def get_patch_attribute(self, attr):
         '''
@@ -2934,6 +2934,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         disloc_est[relevant_sources] = DislocationInverter.get_disloc_lsq(
             stress_field=self.tractions[relevant_sources, :].ravel(),
             coef_mat=self.coef_mat[indices_disl, :][:, indices_disl],
+            pure_shear=self.pure_shear, nthreads=self.nthreads,
             **kwargs)
 
         return disloc_est
@@ -2976,16 +2977,17 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             raise AttributeError('Please give a GF store or set dt.')
 
         npatches = self.nx * self.ny
-        times = self.get_patch_attribute('time')
+        times = self.get_patch_attribute('time') - self.time
+
         calc_times = num.arange(times.min(), times.max() + dt, dt)
         delta_disloc_est = num.zeros((npatches, 3, calc_times.size))
 
         for itime, t in enumerate(calc_times):
             delta_disloc_est[:, :, itime] = self.get_okada_slip(
-                time=t - self.time, **kwargs)
+                time=t, **kwargs)
 
         # if we have only one timestep there is no gradient
-        if times.size > 1:
+        if calc_times.size > 1:
             delta_disloc_est = num.gradient(delta_disloc_est, axis=2)
 
         return delta_disloc_est, calc_times

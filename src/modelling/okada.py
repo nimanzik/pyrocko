@@ -4,6 +4,7 @@
 # ---|P------/S----------~Lg----------
 import numpy as num
 import logging
+from threadpoolctl import threadpool_limits
 
 from pyrocko import moment_tensor as mt
 import pyrocko.guts as guts
@@ -282,8 +283,8 @@ class DislocationInverter(object):
     '''
 
     @staticmethod
-    def get_coef_mat_bulk(source_patches_list, pure_shear=False,
-                          rotate_sdn=True, nthreads=0):
+    def get_coef_mat(source_patches_list, pure_shear=False,
+                     rotate_sdn=True, nthreads=1):
         '''
         Build coefficient matrix for given source_patches
 
@@ -376,8 +377,8 @@ class DislocationInverter(object):
         return -coefmat / unit_disl
 
     @staticmethod
-    def get_coef_mat(source_patches_list, pure_shear=False,
-                     rotate_sdn=True, nthreads=0):
+    def get_coef_mat_single(source_patches_list, pure_shear=False,
+                            rotate_sdn=True, nthreads=1):
         '''
         Build coefficient matrix for given source_patches
 
@@ -589,6 +590,7 @@ class DislocationInverter(object):
             coef_mat=None,
             source_list=None,
             pure_shear=False,
+            nthreads=1,
             **kwargs):
         '''
         Least square inversion to get displacement from stress
@@ -623,7 +625,8 @@ class DislocationInverter(object):
 
         if source_list is not None and coef_mat is None:
             coef_mat = DislocationInverter.get_coef_mat(
-                source_list, pure_shear=pure_shear, **kwargs)
+                source_list, pure_shear=pure_shear, nthreads=nthreads,
+                **kwargs)
 
         idx = num.arange(0, coef_mat.shape[0])
         if pure_shear:
@@ -635,11 +638,12 @@ class DislocationInverter(object):
         if stress_field.ndim == 2:
             stress_field = stress_field.ravel()
 
-        disloc_est[idx] = num.linalg.multi_dot([num.linalg.inv(
-            num.dot(coef_mat_in.T, coef_mat_in)),
-            coef_mat_in.T,
-            stress_field[idx]])
-        return disloc_est.reshape(-1, 3)
+        with threadpool_limits(limits=nthreads, user_api='blas'):
+            disloc_est[idx] = num.linalg.multi_dot([num.linalg.inv(
+                num.dot(coef_mat_in.T, coef_mat_in)),
+                coef_mat_in.T,
+                stress_field[idx]])
+            return disloc_est.reshape(-1, 3)
 
 
 __all__ = [

@@ -25,7 +25,7 @@ store = engine.get_store(store_id)
 
 strike = 0.
 dip = 90.
-dep = .5*km
+dep = 3*km
 leng = 2*km
 wid = 2*km
 
@@ -38,10 +38,11 @@ source_params = dict(
     dip=dip,
     strike=strike,
     magnitude=6.,
-    anchor='top')
+    anchor='top',
+    decimation_factor=4)
 
 dyn_rupture = gf.PseudoDynamicRupture(
-    nx=2, ny=2,
+    nx=5, ny=5,
     tractions=(1.e4, 0.e4, 0.),
     **source_params)
 
