@@ -2611,7 +2611,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             dist_points = num.array([
                 num.linalg.norm(points_xy - num.array([x, y]), axis=1)
                 for x, y in zip(nucl_x, nucl_y)])
-            nucl_indices = num.argmin(dist_points, axis=0)
+            nucl_indices = num.argmin(dist_points, axis=1)
 
             if nucl_times is None:
                 nucl_times = num.zeros_like(nucl_indices)
