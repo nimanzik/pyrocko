@@ -2896,7 +2896,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 'Source patches are needed. Please calculate them first.')
         return num.array([getattr(p, attr) for p in self.patches])
 
-    def get_okada_slip(self, time=None, **kwargs):
+    def get_okada_slip(self, time=None, scale_slip=True, **kwargs):
 
         '''
         Get slip per subfault patch for given time after rupture start
@@ -2943,6 +2943,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             coef_mat=self.coef_mat[indices_disl, :][:, indices_disl],
             pure_shear=self.pure_shear, nthreads=self.nthreads,
             **kwargs)
+
+        if self.slip and scale_slip:
+            disloc_est *= self.slip / num.linalg.norm(disloc_est, axis=1).max()
 
         return disloc_est
 

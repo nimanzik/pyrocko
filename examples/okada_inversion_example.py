@@ -25,7 +25,7 @@ aw2 = width_total / 2.
 source = OkadaSource(
     lat=0., lon=0., north_shift=ref_north, east_shift=ref_east,
     depth=ref_depth,
-    al1=al1, al2=al2, aw1=aw1, aw2=aw2, strike=45., dip=0., rake=90.,
+    al1=al1, al2=al2, aw1=aw1, aw2=aw2, strike=45., dip=0.,
     slip=1., opening=0., poisson=0.25, shearmod=32.0e9)
 
 # Discretize source and set receiver locations on source plane center points
@@ -40,9 +40,9 @@ stress_comp = 1
 
 stress_field = num.zeros((npoints * 3, 1))
 
-for iw in range(nwidth):
-    for il in range(nlength):
-        idx = (iw * nlength + il) * 3
+for il in range(nlength):
+    for iw in range(nwidth):
+        idx = (il * nwidth + iw) * 3
         if (il > nlength / 2. and il < nlength - 4) and \
                 (iw > 2 and iw < nwidth - 4):
             stress_field[idx + stress_comp] = dstress

@@ -237,8 +237,8 @@ class OkadaSource(AnalyticalRectangularSource):
         assert nlength > 0
         assert nwidth > 0
 
-        il = num.tile(num.arange(nlength), nwidth)
-        iw = num.repeat(num.arange(nwidth), nlength)
+        il = num.repeat(num.arange(nlength), nwidth)
+        iw = num.tile(num.arange(nwidth), nlength)
 
         patch_length = self.length / nlength
         patch_width = self.width / nwidth
