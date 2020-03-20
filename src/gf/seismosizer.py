@@ -2472,10 +2472,17 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                     axis=1)
 
     def pyrocko_moment_tensor(self, store=None, target=None):
+        self.ensure_tractions()
+
+        # TODO: Now this should be slip, then it depends on the store.
+        # TODO: default to tractions is store is not given?
+        tractions = num.mean(self.tractions, axis=0)
+        rake = num.arctan2(tractions[1], tractions[0])
+
         return pmt.MomentTensor(
             strike=self.strike,
             dip=self.dip,
-            rake=self.rake,
+            rake=rake,
             scalar_moment=self.get_moment(store, target))
 
     def pyrocko_event(self, store=None, target=None, **kwargs):
@@ -2488,7 +2495,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         d = {}
         mt = ev.moment_tensor
         if mt:
-            # TODO: Add rake as expression of tension_strike / dip
+            # TODO: Add rake as expression of tension_strike / dip?
             (strike, dip, rake), _ = mt.both_strike_dip_rake()
             d.update(
                 strike=float(strike),

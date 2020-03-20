@@ -16,9 +16,9 @@ guts_prefix = 'modelling'
 
 logger = logging.getLogger('pyrocko.modelling.okada')
 
-d2r = num.pi / 180.
-r2d = 180. / num.pi
-km = 1.0e3
+d2r = num.pi/180.
+r2d = 180./num.pi
+km = 1e3
 
 
 class AnalyticalSource(Location):
