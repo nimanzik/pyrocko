@@ -2397,9 +2397,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
     @nucleation_x.setter
     def nucleation_x(self, nucleation_x):
+
         if not isinstance(
                 nucleation_x, num.ndarray) and nucleation_x is not None:
-
             nucleation_x = num.array([nucleation_x])
 
         self.nucleation_x__ = nucleation_x
