@@ -2295,6 +2295,13 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         help='down-dip position of rupture nucleation in normalized fault '
              'plane coordinates (-1 = upper edge, +1 = lower edge)')
 
+    nucleation_time__ = Array.T(
+        optional=True,
+        default=num.array([0]),
+        dtype=num.float,
+        help='Time in [s] after origin, when nucleation points defined by '
+             'nucleation_x and nucleation_y shall rupture.')
+
     gamma = Float.T(
         default=0.8,
         help='scaling factor between S wave velocity and rupture velocity: '
@@ -2403,6 +2410,17 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             nucleation_y = num.array([nucleation_y])
 
         self.nucleation_y__ = nucleation_y
+
+    @property
+    def nucleation_time(self):
+        return self.nucleation_time__
+
+    @nucleation_time.setter
+    def nucleation_time(self, nucleation_time):
+        if not isinstance(nucleation_time, num.ndarray):
+            nucleation_time = num.array([nucleation_time])
+
+        self.nucleation_time__ = nucleation_time
 
     def base_key(self):
         return SourceWithDerivedMagnitude.base_key(self) + (
@@ -2628,33 +2646,36 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         vr = self._discretize_rupture_v(store, interpolation, points)\
             .reshape(nx, ny)
 
-        def initialize_times(nucl_times=None):
+        def initialize_times():
             nucl_x, nucl_y = self.nucleation_x, self.nucleation_y
 
-            if not isinstance(nucl_x, num.ndarray):
-                nucl_x = num.array([nucl_x])
-            if not isinstance(nucl_y, num.ndarray):
-                nucl_y = num.array([nucl_y])
-
             if nucl_x.shape != nucl_y.shape:
-                logger.warn('nucleation coordinates have different shape.')
+                raise ValueError(
+                    'nucleation coordinates have different shape.')
 
             dist_points = num.array([
                 num.linalg.norm(points_xy - num.array([x, y]), axis=1)
                 for x, y in zip(nucl_x, nucl_y)])
             nucl_indices = num.argmin(dist_points, axis=1)
 
-            if nucl_times is None:
+            if self.nucleation_time is None:
                 nucl_times = num.zeros_like(nucl_indices)
+            else:
+                if self.nucleation_time.shape == nucl_x.shape:
+                    nucl_times = self.nucleation_time
+                else:
+                    raise ValueError(
+                        'Nucleation coordinates and times have different '
+                        'shapes')
 
             t = num.full(nx*ny, -1.)
             t[nucl_indices] = nucl_times
             return t.reshape(nx, ny)
 
         if times is None:
-            times = initialize_times(nucl_times=None)
+            times = initialize_times()
         elif times.shape != tuple((nx, ny)):
-            times = initialize_times(nucl_times=None)
+            times = initialize_times()
             logger.warn(
                 'Given times are not in right shape. Therefore standard time'
                 ' array is used.')
