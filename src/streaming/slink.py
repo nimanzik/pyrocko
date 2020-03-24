@@ -33,7 +33,7 @@ class SlowSlink(object):
         self.running = False
         self.stream_selectors = []
 
-    def query_streams(self):
+    def query_streams(self, stream_codes):
         cmd = ['slinktool',  '-Q', self.host+':'+str(self.port)]
         logger.debug('Running %s' % ' '.join(cmd))
         try:
@@ -42,15 +42,35 @@ class SlowSlink(object):
             raise SlowSlinkError('Could not start "slinktool": %s' % str(e))
 
         (a, b) = slink.communicate()
-        streams = []
-        for line in a.splitlines():
-            line = line.decode()
-            toks = line.split()
-            if len(toks) == 9:
-                net, sta, loc, cha = toks[0], toks[1], '', toks[2]
-            else:
-                net, sta, loc, cha = toks[0], toks[1], toks[2], toks[3]
-            streams.append((net, sta, loc, cha))
+        if b is not None:
+            streams = []
+            for line in a.splitlines():
+                line = line.decode()
+                toks = line.split()
+                if len(toks) == 9:
+                    net, sta, loc, cha = toks[0], toks[1], '', toks[2]
+                else:
+                    net, sta, loc, cha = toks[0], toks[1], toks[2], toks[3]
+                streams.append((net, sta, loc, cha))
+        else:
+            cmd = ['slinktool',  '-L', self.host+':'+str(self.port)]
+            logger.debug('Running %s' % ' '.join(cmd))
+            try:
+                slink = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+            except OSError as e:
+                raise SlowSlinkError('Could not start "slinktool": %s' % str(e))
+
+            (a, b) = slink.communicate()
+            streams = []
+            for line in a.splitlines():
+                line = line.decode()
+                toks = line.split()
+                net, sta, loc, cha = toks[0], toks[1], '', 'BHE'
+                streams.append((net, sta, loc, cha))
+                net, sta, loc, cha = toks[0], toks[1], '', 'BHN'
+                streams.append((net, sta, loc, cha))
+                net, sta, loc, cha = toks[0], toks[1], '', 'BHZ'
+                streams.append((net, sta, loc, cha))
         return streams
 
     def add_stream(self, network, station, location, channel):
