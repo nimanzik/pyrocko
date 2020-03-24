@@ -2283,13 +2283,15 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
              ' bottom and also top_left, top_right,bottom_left,'
              ' bottom_right, center_left and center right')
 
-    nucleation_x = Float.T(
-        default=0.,
+    nucleation_x__ = Array.T(
+        default=num.array([0]),
+        dtype=num.float,
         help='horizontal position of rupture nucleation in normalized fault '
              'plane coordinates (-1 = left edge, +1 = right edge)')
 
-    nucleation_y = Float.T(
-        default=0.,
+    nucleation_y__ = Array.T(
+        default=num.array([0]),
+        dtype=num.float,
         help='down-dip position of rupture nucleation in normalized fault '
              'plane coordinates (-1 = upper edge, +1 = lower edge)')
 
@@ -2379,6 +2381,28 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         SourceWithDerivedMagnitude.__init__(self, **kwargs)
         self.check_conflicts()
+
+    @property
+    def nucleation_x(self):
+        return self.nucleation_x__
+
+    @nucleation_x.setter
+    def nucleation_x(self, nucleation_x):
+        if not isinstance(nucleation_x, num.ndarray):
+            nucleation_x = num.array([nucleation_x])
+
+        self.nucleation_x__ = nucleation_x
+
+    @property
+    def nucleation_y(self):
+        return self.nucleation_y__
+
+    @nucleation_x.setter
+    def nucleation_y(self, nucleation_y):
+        if not isinstance(nucleation_y, num.ndarray):
+            nucleation_y = num.array([nucleation_y])
+
+        self.nucleation_y__ = nucleation_y
 
     def base_key(self):
         return SourceWithDerivedMagnitude.base_key(self) + (
