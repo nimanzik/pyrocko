@@ -2397,7 +2397,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
     def nucleation_y(self):
         return self.nucleation_y__
 
-    @nucleation_x.setter
+    @nucleation_y.setter
     def nucleation_y(self, nucleation_y):
         if not isinstance(nucleation_y, num.ndarray):
             nucleation_y = num.array([nucleation_y])
