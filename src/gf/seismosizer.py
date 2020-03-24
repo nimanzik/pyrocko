@@ -2297,10 +2297,10 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
     nucleation_time__ = Array.T(
         optional=True,
-        default=num.array([0]),
-        dtype=num.float,
         help='Time in [s] after origin, when nucleation points defined by '
-             'nucleation_x and nucleation_y shall rupture.')
+             'nucleation_x and nucleation_y shall rupture.',
+        dtype=num.float,
+        shape=(None,))
 
     gamma = Float.T(
         default=0.8,
@@ -2308,9 +2308,11 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
              'v_r = gamma * v_s')
 
     nx = Int.T(
+        default=2,
         help='number of discrete source patches in x direction (along strike)')
 
     ny = Int.T(
+        default=2,
         help='number of discrete source patches in y direction (down dip)')
 
     magnitude = Float.T(
@@ -2395,7 +2397,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
     @nucleation_x.setter
     def nucleation_x(self, nucleation_x):
-        if not isinstance(nucleation_x, num.ndarray):
+        if not isinstance(
+                nucleation_x, num.ndarray) and nucleation_x is not None:
+
             nucleation_x = num.array([nucleation_x])
 
         self.nucleation_x__ = nucleation_x
@@ -2406,7 +2410,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
     @nucleation_y.setter
     def nucleation_y(self, nucleation_y):
-        if not isinstance(nucleation_y, num.ndarray):
+        if not isinstance(
+                nucleation_y, num.ndarray) and nucleation_y is not None:
+
             nucleation_y = num.array([nucleation_y])
 
         self.nucleation_y__ = nucleation_y
@@ -2417,7 +2423,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
     @nucleation_time.setter
     def nucleation_time(self, nucleation_time):
-        if not isinstance(nucleation_time, num.ndarray):
+        if not isinstance(
+                nucleation_time, num.ndarray) and nucleation_time is not None:
+
             nucleation_time = num.array([nucleation_time])
 
         self.nucleation_time__ = nucleation_time
@@ -3034,7 +3042,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         npatches = self.nx * self.ny
         times = self.get_patch_attribute('time') - self.time
 
-        calc_times = num.arange(times.min(), times.max() + dt, dt)
+        calc_times = num.arange(0., times.max() + dt, dt)
         delta_disloc_est = num.zeros((npatches, 3, calc_times.size))
 
         for itime, t in enumerate(calc_times):
@@ -3043,9 +3051,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         # if we have only one timestep there is no gradient
         if calc_times.size > 1:
-            delta_disloc_est = num.gradient(delta_disloc_est, axis=2)
+            delta_disloc_est = num.diff(delta_disloc_est, axis=2)
 
-        return delta_disloc_est, calc_times
+        return delta_disloc_est, calc_times[1:]
 
     def get_moment_rate(self, *args, **kwargs):
         '''
