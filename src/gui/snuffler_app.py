@@ -167,17 +167,16 @@ def setup_acquisition_sources(args):
 
                 if '_' not in msl.group(5):
                     try:
-                        stream_codes = msl.group(5).split('.')
-                        streams = sl.query_streams(stream_codes)
+                        streams = sl.query_streams()
                     except slink.SlowSlinkError as e:
                         logger.fatal(str(e))
                         sys.exit(1)
 
                     streams = list(set(
                         util.match_nslcs(stream_patterns, streams)))
-
                     for stream in streams:
                         sl.add_stream(*stream)
+
                 else:
                     for stream in stream_patterns:
                         sl.add_raw_stream_selector(stream)
