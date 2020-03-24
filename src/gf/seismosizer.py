@@ -2348,7 +2348,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
              'When parameters magnitude or slip are set, tractions will be'
              'normalized to accomodate the desired energy release.',
         dtype=num.float,
-        shape=(None,))
+        shape=(None, 3))
 
     coef_mat = Array.T(
         optional=True,
@@ -2526,7 +2526,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         # TODO: Now this should be slip, then it depends on the store.
         # TODO: default to tractions is store is not given?
-        tractions = num.mean(self.tractions, axis=0)
+        tractions = self.tractions.mean(axis=0)
         rake = num.arctan2(tractions[1], tractions[0])
 
         return pmt.MomentTensor(
