@@ -2334,7 +2334,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         optional=True,
         help='List of all boundary elements/sub faults/fault patches')
 
-    tractions = Array.T(
+    tractions__ = Array.T(
         optional=True,
         help='Stress field the source is exposed to in [Pa].'
              'Float will initialize an isotrop stress field for'
@@ -2430,6 +2430,29 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         self.nucleation_time__ = nucleation_time
 
+    @property
+    def tractions(self):
+        if self.tractions__ is None:
+            logger.warn(
+                'no traction field given, assuming uniform traction 1.0 Pa')
+            return num.full((self.nx*self.ny, 3), 1.)
+        else:
+            return self.tractions__
+
+    @tractions.setter
+    def tractions(self, tractions):
+        if isinstance(tractions, float):
+            logger.info('Assuming uniform traction %.1f Pa', tractions)
+            self.tractions__ = num.full((self.nx * self.ny, 3), tractions)
+
+        elif isinstance(tractions, tuple):
+            assert len(tractions) == 3
+            self.tractions__ = num.tile(tractions, self.nx*self.ny)\
+                .reshape(-1, 3)
+
+        else:
+            self.tractions__ = tractions
+
     def base_key(self):
         return SourceWithDerivedMagnitude.base_key(self) + (
             self.magnitude,
@@ -2522,8 +2545,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                     axis=1)
 
     def pyrocko_moment_tensor(self, store=None, target=None):
-        self.ensure_tractions()
-
         # TODO: Now this should be slip, then it depends on the store.
         # TODO: default to tractions is store is not given?
         tractions = self.tractions.mean(axis=0)
@@ -2793,21 +2814,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         self.patches = source_disc
 
-    def ensure_tractions(self):
-        if isinstance(self.tractions, float):
-            logger.info('Assuming uniform traction %.1f Pa', self.tractions)
-            self.tractions = num.full((self.nx * self.ny, 3), self.tractions)
-
-        elif isinstance(self.tractions, tuple):
-            assert len(self.tractions) == 3
-            self.tractions = num.tile(self.tractions, self.nx*self.ny)\
-                .reshape(-1, 3)
-
-        elif self.tractions is None:
-            logger.warn(
-                'no traction field given, assuming uniform traction 1.0 Pa')
-            self.tractions = num.full((self.nx*self.ny, 3), 1.)
-
     def discretize_basesource(self, store, target=None):
         '''
         Prepare source for synthetic waveform calculation
@@ -2826,7 +2832,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         self.discretize_patches(store, interpolation)
         self.calc_coef_mat()
-        self.ensure_tractions()
 
         delta_slip, times = self.get_delta_slip(store)
         ntimes = times.size
