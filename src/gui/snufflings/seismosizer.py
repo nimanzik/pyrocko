@@ -169,7 +169,7 @@ class Seismosizer(Snuffling):
         req.regularize()
 
         try:
-            resp = self.get_engine().process(req)
+            resp = self.get_engine().process(req, nthreads=0)
         except (gf.meta.OutOfBounds, gf.store_ext.StoreExtError)as e:
             self.fail(e)
 
