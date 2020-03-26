@@ -2461,8 +2461,8 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             self.dip,
             self.length,
             self.width,
-            self.nucleation_x,
-            self.nucleation_y,
+            float(self.nucleation_x.mean()),
+            float(self.nucleation_y.mean()),
             self.decimation_factor,
             self.anchor,
             self.pure_shear)
@@ -2838,6 +2838,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         ntimes = times.size
         npatches = self.nx * self.ny
 
+        times += self.time
         times = num.tile(times, npatches).reshape(npatches, -1)
 
         slip_strike = delta_slip[:, 0::3, :].squeeze(axis=1)

@@ -259,9 +259,9 @@ class RectangularSource(Seismosizer):
         self.add_parameter(
             Param('Rake', 'rake', 0., -180., 180.))
         self.add_parameter(
-            Param('Length', 'length', 0., 0., 1000*km))
+            Param('Length', 'length', 10.*km, .1*km, 100*km))
         self.add_parameter(
-            Param('Width', 'width', 0., 0., 500*km))
+            Param('Width', 'width', 5.*km, .1*km, 50*km))
         self.add_parameter(
             Param('Nucleation X', 'nucleation_x', 0., -1., 1.))
         self.add_parameter(
@@ -343,9 +343,9 @@ class PseudoDynamicRuptureSource(Seismosizer):
         self.add_parameter(
             Param('Width', 'width', 5.*km, .1*km, 50*km))
         self.add_parameter(
-            Param('Nucleation X', 'nucleation_x', 0, -1., 1.))
+            Param('Nucleation X', 'nucleation_x', 0., -1., 1.))
         self.add_parameter(
-            Param('Nucleation Y', 'nucleation_y', 0, -1., 1.))
+            Param('Nucleation Y', 'nucleation_y', 0., -1., 1.))
         self.add_parameter(
             Param('Gamma', 'gamma', 0.8, 0.5, 1.5))
         self.add_parameter(
@@ -400,7 +400,7 @@ class PseudoDynamicRuptureSource(Seismosizer):
             nucleation_y=self.nucleation_y,
             gamma=self.gamma,
             stf=self.get_stf())
-        source.ensure_tractions()
+
         return source
 
 
