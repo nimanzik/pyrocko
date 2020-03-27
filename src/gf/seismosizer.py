@@ -3059,8 +3059,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         # if we have only one timestep there is no gradient
         if calc_times.size > 1:
             delta_disloc_est = num.diff(delta_disloc_est, axis=2)
+            calc_times = calc_times[1:]
 
-        return delta_disloc_est, calc_times[1:]
+        return delta_disloc_est, calc_times
 
     def get_moment_rate(self, *args, **kwargs):
         '''
