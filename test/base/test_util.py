@@ -66,7 +66,7 @@ class UtilTestCase(unittest.TestCase):
             assert s == util.time_to_str(tx)
 
         else:
-            with self.assertRaises(TimeStrError):
+            with self.assertRaises(util.TimeStrError):
                 util.str_to_time(s)
 
     def testIterTimes(self):
