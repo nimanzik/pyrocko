@@ -55,7 +55,7 @@ class UtilTestCase(unittest.TestCase):
         tmin2, tmax2 = map(util.str_to_time, (stmin, stmax))
         assert tmin == tmin2
         assert tmax == tmax2
-        if sys.maxsize > 32**2:
+        if sys.maxsize > 2**32:
             assert tmax - tmin > 200*365*24*60*60
 
     def testBigTime(self):
