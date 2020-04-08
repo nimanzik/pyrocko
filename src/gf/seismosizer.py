@@ -2425,6 +2425,28 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         self.nucleation_y__ = nucleation_y
 
     @property
+    def nucleation(self):
+        nucl_x, nucl_y = self.nucleation_x, self.nucleation_y
+
+        if (nucl_x is None) or (nucl_y is None):
+            return None
+
+        assert nucl_x.shape[0] == nucl_y.shape[0]
+
+        return num.concatenate(
+            (nucl_x[:, num.newaxis], nucl_y[:, num.newaxis]), axis=1)
+
+    @nucleation.setter
+    def nucleation(self, nucleation):
+        if isinstance(nucleation, list):
+            nucleation = num.array([*nucleation])
+
+        assert nucleation.shape[1] == 2
+
+        self.nucleation_x = nucleation[:, 0]
+        self.nucleation_y = nucleation[:, 1]
+
+    @property
     def nucleation_time(self):
         return self.nucleation_time__
 
@@ -2464,7 +2486,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             assert tractions.shape[1] == 3
             self.tractions__ = tractions
 
-        else:
+        elif tractions is not None:
             raise AttributeError(
                 'tractions is of incompatible type %s' % type(tractions))
 
@@ -3060,7 +3082,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         if not dt:
             raise AttributeError('Please give a GF store or set dt.')
 
-        npatches = self.nx * self.ny
+        npatches = len(self.patches)
         times = self.get_patch_attribute('time') - self.time
 
         calc_times = num.arange(0., times.max() + dt, dt)
