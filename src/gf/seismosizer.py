@@ -2720,7 +2720,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                     'nucleation coordinates have different shape.')
 
             dist_points = num.array([
-                num.linalg.norm(points_xy - num.array([x, y]), axis=1)
+                num.linalg.norm(points_xy - num.array([x, y]).ravel(), axis=1)
                 for x, y in zip(nucl_x, nucl_y)])
             nucl_indices = num.argmin(dist_points, axis=1)
 
