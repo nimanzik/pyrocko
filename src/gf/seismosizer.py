@@ -2867,12 +2867,15 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         else:
             interpolation = target.interpolation
 
-        self.discretize_patches(store, interpolation)
-        self.calc_coef_mat()
+        if not self.patches:
+            self.discretize_patches(store, interpolation)
+
+        if self.coef_mat is None:
+            self.calc_coef_mat()
 
         delta_slip, times = self.get_delta_slip(store)
         ntimes = times.size
-        npatches = self.nx * self.ny
+        npatches = len(self.patches)
 
         times += self.time
         times = num.tile(times, npatches).reshape(npatches, -1)
