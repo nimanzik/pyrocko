@@ -2645,7 +2645,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         nx += 1
         ny += 1
 
-        points_xy = num.empty((nx * ny, 2))
+        points_xy = num.zeros((nx * ny, 2))
         points_xy[:, 0] = num.repeat(num.linspace(-1., 1., nx), ny)
         points_xy[:, 1] = num.tile(num.linspace(-1., 1., ny), nx)
 
