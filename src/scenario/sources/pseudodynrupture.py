@@ -15,7 +15,7 @@ km = 1e3
 guts_prefix = 'pf.scenario'
 
 
-class RectangularSourceGenerator(SourceGenerator):
+class PseudoDynamicRuptureGenerator(SourceGenerator):
     depth_min = Float.T(
         default=0.0)
     depth_max = Float.T(
@@ -60,14 +60,14 @@ class RectangularSourceGenerator(SourceGenerator):
         else:
             if None in (self.strike, self.dip, self.rake):
                 raise ValueError(
-                    'RectangularSourceGenerator: '
+                    'PseudoDynamicRuptureGenerator: '
                     'strike, dip, rake must be used in combination.')
 
             strike = self.strike
             dip = self.dip
             rake = self.rake
 
-        source = gf.RectangularSource(
+        source = gf.PseudoDynamicRupture(
             time=float(time),
             lat=float(lat),
             lon=float(lon),
