@@ -2681,7 +2681,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
     def discretize_time(
             self, store, interpolation='nearest_neighbor',
-            times=None, *args, **kwargs):
+            vr=None, times=None, *args, **kwargs):
 
         '''
         Get rupture start time for discrete points on source plane
@@ -2691,6 +2691,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         :type store: :py:class:`pyrocko.gf.store.Store`
         :param target: Target information
         :type target: optional, :py:class:`pyrocko.gf.target.Target`
+        :param vr: Array, containing rupture user defined rupture velocity
+            values
+        :type vr: optional, :py:class:`numpy.ndarray`
         :param times: Array, containing zeros, where rupture is starting and
             otherwise -1, where time will be calculated. If not given, rupture
             starts at nucleation_x, nucleation_y.
@@ -2709,8 +2712,15 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         nx, ny, delta, points, points_xy = self._discretize_points(
             store, cs='xyz')
 
-        vr = self._discretize_rupture_v(store, interpolation, points)\
-            .reshape(nx, ny)
+        if vr is None:
+            vr = self._discretize_rupture_v(store, interpolation, points)\
+                .reshape(nx, ny)
+        elif vr.shape != tuple((nx, ny)):
+            vr = self._discretize_rupture_v(store, interpolation, points)\
+                .reshape(nx, ny)
+            logger.warn(
+                'Given rupture velocities are not in right shape. Therefore'
+                ' standard rupture velocity array is used.')
 
         def initialize_times():
             nucl_x, nucl_y = self.nucleation_x, self.nucleation_y
