@@ -251,7 +251,6 @@ def station(url=g_url, site=g_default_site, majorversion=1, parsed=True,
             lst.append(' '.join((network, station, location, channel,
                                  sdatetime(tmin), sdatetime(tmax))))
 
-        print(lst)
         post = '\n'.join(lst)
         params = dict(post=post.encode())
 
