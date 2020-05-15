@@ -28,7 +28,8 @@ test_dir = op.dirname(op.abspath(__file__))
 
 
 skip_examples = [
-    'examples/trace_restitution_dseed.py'
+    'examples/trace_restitution_dseed.py',
+    'examples/gf_forward_viscoelastic.py'
 ]
 
 
