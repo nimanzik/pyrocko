@@ -2,6 +2,7 @@
 import logging
 
 import os
+import os.path as op
 
 import numpy as num
 from scipy.interpolate import RegularGridInterpolator as scrgi
@@ -717,14 +718,16 @@ class RuptureMap(Map):
 
         kwargs['cmap'] = kwargs.get('cmap', 'afmhot_r')
 
-        make_colormap(num.min(data), num.max(data),
-                      cmap=kwargs['cmap'], space=True)
+        if not op.exists('my_%s.cpt' % kwargs['cmap']):
+            make_colormap(num.min(data), num.max(data),
+                          cmap=kwargs['cmap'], space=True)
+            cpt = kwargs['cmap']
 
         tmp_grd_file = 'tmpdata.grd'
         self.patch_data_to_grid(data, tmp_grd_file)
         self.draw_image(tmp_grd_file, **kwargs)
 
-        clear_temp(gridfiles=[tmp_grd_file], cpts=[kwargs['cmap']])
+        clear_temp(gridfiles=[tmp_grd_file], cpts=[cpt])
 
     def draw_patch_parameter(self, attribute, **kwargs):
         '''
@@ -885,31 +888,39 @@ class RuptureMap(Map):
 
         clear_temp(gridfiles=[tmp_grd_file], cpts=[])
 
-    def animate_time_series(self, variable, dt=None, store=None, **kwargs):
-        v = variable
+    # def animate_time_series(
+    #         self,
+    #         variable,
+    #         file_prefix,
+    #         dt=None,
+    #         store=None,
+    #         **kwargs):
 
-        data = None
-        if v == 'moment_rate':
-            data, times = self.source.get_moment_rate(dt=dt, store=store)
-        elif 'dislocation' in v or 'slip_rate' == v:
-            ddisloc, times = self.source.get_delta_slip(dt=dt, store=store)
-            
-        dt = times[1] - times[0]
+    #     v = variable
 
-        if v == 'dislocation':
-            data 
-        elif v == 'dislocation_x':
+    #     if v == 'moment_rate':
+    #         data, times = self.source.get_moment_rate(dt=dt, store=store)
+    #     elif 'dislocation' in v or 'slip_rate' == v:
+    #         ddisloc, times = self.source.get_delta_slip(dt=dt, store=store)
+    #     else:
+    #         raise ValueError('No dynamic data for given variable %s found' % v)
 
-        elif v == 'dislocation_y':
+    #     dt = times[1] - times[0]
 
-        elif v == 'dislocation_z':
+    #     if v == 'dislocation':
+    #         data = num.linalg.norm(num.cumsum(ddisloc, axis=2), axis=1)
+    #     elif v == 'dislocation_x':
+    #         data = num.cumsum(ddisloc, axis=2)[:, 0, :]
+    #     elif v == 'dislocation_y':
+    #         data = num.cumsum(ddisloc, axis=2)[:, 1, :]
+    #     elif v == 'dislocation_z':
+    #         data = num.cumsum(ddisloc, axis=2)[:, 2, :]
+    #     elif v == 'slip_rate':
+    #         data = num.linalg.norm(ddisloc, axis=1) / dt
 
-        elif v == 'slip_rate':
-            data = num.linalg.norm(ddisloc, axis=1) / dt
-
-        if data is None:
-            raise ValueError('No dynamic data for given variable %s found' % v)
-
+    #     kwargs['cmap'] = kwargs.get('cmap', 'afmhot_r')
+    #     make_colormap(num.min(data), num.max(data),
+    #                   cmap=kwargs['cmap'], space=True)
 
 
 class RuptureView(object):
