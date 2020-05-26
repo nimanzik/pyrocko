@@ -215,15 +215,25 @@ def eventextras_to_array(events, tab):
 
 def events_to_table(events):
     c5 = num.zeros((len(events), 5))
+    m6 = None
 
     for i, ev in enumerate(events):
-        c5[i, :] = ev.lat, ev.lon, ev.north_shift, ev.east_shift, ev.depth
+        c5[i, :] = (
+            ev.lat, ev.lon, ev.north_shift, ev.east_shift, ev.depth)
+
+        if ev.moment_tensor:
+            if m6 is None:
+                m6 = num.zeros((len(events), 6))
+                m6[:, 0:3] = 1.0
+
+            m6[i, :] = ev.moment_tensor.m6()
 
     tab = table.Table()
+
     loc_rec = table.LocationRecipe()
     tab.add_recipe(loc_rec)
-
     tab.add_col(loc_rec.c5_header, c5)
+
     for k, unit in [
             ('time', 's'),
             ('magnitude', None)]:
@@ -231,8 +241,14 @@ def events_to_table(events):
         tab.add_col(table.Header(k, unit), oa_to_array(events, k))
 
     if events:
-        tab = eventtags_to_array(events, tab)
-        tab = eventextras_to_array(events, tab)
+        for i in range(len(events[0].tags)):
+            header, values = eventtags_to_array(events, i)
+            tab.add_col(table.Header(header), values)
+
+    if m6 is not None:
+        mt_rec = table.MomentTensorRecipe()
+        tab.add_recipe(mt_rec)
+        tab.add_col(mt_rec.m6_header, m6)
 
     return tab
 
