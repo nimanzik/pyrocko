@@ -2949,11 +2949,11 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             [p.time for p in self.patches]).repeat(
             gf_patch_npoints, axis=0)
         times_interp = time_interpolator(gf_patches_arr[:, :2]) - times_patches
-        times_interp += times_patches
         times_gf = times_interp[:, num.newaxis] \
             + times.repeat(gf_patch_npoints, axis=0)
 
-        times = times.repeat(gf_patch_npoints, axis=0)
+        # Old, blocky implementation
+        # times_gf = times.repeat(gf_patch_npoints, axis=0)
 
         gf_points = gf_patches_arr.repeat(ntimes, axis=0)
 
@@ -2973,10 +2973,13 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             nl=self.nx,
             nw=self.ny)
 
+        # Debug stuff
         total_slip = num.linalg.norm(delta_slip.sum(axis=2), axis=1)
         ds.slip = total_slip.repeat(gf_patch_npoints*ntimes, axis=0)
 
-        ds.time = times_interp.repeat(ntimes)
+        ds.time = times_patches.repeat(ntimes)
+
+        # ds.time = times_interp.repeat(ntimes)
 
         return ds
 
