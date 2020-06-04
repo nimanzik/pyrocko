@@ -37,6 +37,7 @@ pjoin = os.path.join
 guts_prefix = 'pf'
 
 d2r = math.pi / 180.
+r2d = 180. / math.pi
 
 logger = logging.getLogger('pyrocko.gf.seismosizer')
 
@@ -178,8 +179,8 @@ def discretize_rect_source(deltas, deltat, time, north, east, depth,
     ln = length
     wd = width
 
-    nl = int((2. / decimation_factor) * num.ceil(ln / mindeltagf)) + 1
-    nw = int((2. / decimation_factor) * num.ceil(wd / mindeltagf)) + 1
+    nl = max(1, int((1. / decimation_factor) * num.ceil(ln / mindeltagf)))
+    nw = max(1, int((1. / decimation_factor) * num.ceil(wd / mindeltagf)))
 
     n = int(nl * nw)
 
@@ -2387,6 +2388,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 kwargs['magnitude'] = float(pmt.moment_to_magnitude(mom))
 
         SourceWithDerivedMagnitude.__init__(self, **kwargs)
+        self._interpolators = {}
         self.check_conflicts()
 
     @property
@@ -2722,6 +2724,36 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         return points, points_xy, vr, times
 
+    def get_vr_time_interpolators(
+            self, store, interpolation='nearest_neighbor',
+            *args, **kwargs):
+
+        interp_map = {'multilinear': 'linear', 'nearest_neighbor': 'nearest'}
+        if interpolation not in interp_map:
+            raise TypeError(
+                'Interpolation method %s not available' % interpolation)
+
+        if not self._interpolators.get(interpolation, None):
+            _, points_xy, vr, times = self.discretize_time(
+                store=store, *args, **kwargs)
+
+            nx, ny = times.shape
+            anch_x, anch_y = map_anchor[self.anchor]
+
+            points_xy[:, 0] = (points_xy[:, 0] - anch_x) * self.length / 2.
+            points_xy[:, 1] = (points_xy[:, 1] - anch_y) * self.width / 2.
+
+            self._interpolators[interpolation] = (
+                nx, ny, times, vr,
+                RegularGridInterpolator(
+                    (points_xy[::ny, 0], points_xy[:ny, 1]), times,
+                    method=interp_map[interpolation]),
+                RegularGridInterpolator(
+                    (points_xy[::ny, 0], points_xy[:ny, 1]), vr,
+                    method=interp_map[interpolation]))
+
+        return self._interpolators[interpolation]
+
     def discretize_patches(
             self, store=None, interpolation='nearest_neighbor', grid_shape=(),
             *args, **kwargs):
@@ -2738,30 +2770,13 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         :param interpolation: Kind of interpolation used. Choice between
             'multilinear' and 'nearest_neighbor'
         :type interpolation: optional, str
-        :param grid_shape: Wished sub fault patch grid size (nlength, nwidth).
+        :param grid_shape: Desired sub fault patch grid size (nlength, nwidth).
             Either factor or grid_shape should be set.
         :type grid_shape: optional, tuple of int
         '''
-        interp_map = {'multilinear': 'linear', 'nearest_neighbor': 'nearest'}
-        if interpolation not in interp_map:
-            raise TypeError(
-                'Interpolation method %s not available' % interpolation)
-
-        _, points_xy, vr, times = self.discretize_time(
-            store=store, *args, **kwargs)
-
-        ny, nx = times.shape
+        nx, ny, times, vr, time_interpolator, vr_interpolator = \
+            self.get_vr_time_interpolators(store, *args, **kwargs)
         anch_x, anch_y = map_anchor[self.anchor]
-
-        points_xy[:, 0] = (points_xy[:, 0] - anch_x) * self.length / 2.
-        points_xy[:, 1] = (points_xy[:, 1] - anch_y) * self.width / 2.
-
-        time_interpolator = RegularGridInterpolator(
-            (points_xy[::nx, 0], points_xy[:nx, 1]), times,
-            method=interp_map[interpolation])
-        vr_interpolator = RegularGridInterpolator(
-            (points_xy[::nx, 0], points_xy[:nx, 1]), vr,
-            method=interp_map[interpolation])
 
         al = self.length / 2.
         aw = self.width / 2.
@@ -2844,6 +2859,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         if self.coef_mat is None:
             self.calc_coef_mat()
 
+        # TODO: times starts at [deltat, ...] and not 0.!
         delta_slip, times = self.get_delta_slip(store)
         ntimes = times.size
         npatches = len(self.patches)
@@ -2897,15 +2913,17 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             m6s *= moment / patch_mom.sum()
 
         # Projection onto GFStore spacing
+        deltas = tuple(
+            (self.length/self.nx, self.width/self.ny, *store.config.deltas))
+
         gf_patches = []
         for p in self.patches:
-            rect_points, _, _, _, _ = discretize_rect_source(
-                store.config.deltas, store.config.deltat,
+            rect_points, *_ = discretize_rect_source(
+                deltas, store.config.deltat,
                 p.time, p.north_shift, p.east_shift, p.depth,
                 p.strike, p.dip, p.length, p.width,
                 decimation_factor=self.decimation_factor,
                 anchor='center', pointsonly=True)
-
             gf_patches.append(rect_points)
 
         gf_patch_npoints = num.array(
@@ -2915,8 +2933,29 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         m6s /= gf_patch_npoints[:, num.newaxis, num.newaxis]
         m6s = m6s.repeat(gf_patch_npoints, axis=0)
 
-        gf_points = num.array(gf_patches).reshape(-1, 3).repeat(ntimes, axis=0)
+        gf_patches_arr = num.array(gf_patches).reshape(-1, 3)
+
+        # Rotate the fault plane onto the surface (local x-y coord system)
+        gf_patches_plane = gf_patches_arr.copy()
+        rotmat = num.asarray(
+            pmt.euler_to_matrix(-self.dip*d2r, -self.strike*d2r, 0.))
+        gf_patches_plane[:, 0] -= self.north_shift
+        gf_patches_plane[:, 1] -= self.east_shift
+        gf_patches_plane[:, 2] -= self.depth
+        gf_patches_plane = num.dot(rotmat.T, gf_patches_plane.T).T
+
+        *_, time_interpolator, _ = self.get_vr_time_interpolators(store)
+        times_patches = num.array(
+            [p.time for p in self.patches]).repeat(
+            gf_patch_npoints, axis=0)
+        times_interp = time_interpolator(gf_patches_arr[:, :2]) - times_patches
+        times_interp += times_patches
+        times_gf = times_interp[:, num.newaxis] \
+            + times.repeat(gf_patch_npoints, axis=0)
+
         times = times.repeat(gf_patch_npoints, axis=0)
+
+        gf_points = gf_patches_arr.repeat(ntimes, axis=0)
 
         dl = num.abs([self.patches[0].al1, self.patches[0].al2]).sum()
         dw = num.abs([self.patches[0].aw1, self.patches[0].aw2]).sum()
@@ -2924,7 +2963,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         ds = meta.DiscretizedMTSource(
             lat=self.lat,
             lon=self.lon,
-            times=times.ravel(),
+            times=times_gf.ravel(),
             north_shifts=gf_points[:, 0],
             east_shifts=gf_points[:, 1],
             depths=gf_points[:, 2],
@@ -2933,6 +2972,11 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             dw=dw,
             nl=self.nx,
             nw=self.ny)
+
+        total_slip = num.linalg.norm(delta_slip.sum(axis=2), axis=1)
+        ds.slip = total_slip.repeat(gf_patch_npoints*ntimes, axis=0)
+
+        ds.time = times_interp.repeat(ntimes)
 
         return ds
 
