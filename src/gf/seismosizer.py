@@ -2949,8 +2949,8 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             [p.time for p in self.patches]).repeat(
             gf_patch_npoints, axis=0)
         times_interp = time_interpolator(gf_patches_arr[:, :2]) - times_patches
-        times_gf = times_interp[:, num.newaxis] \
-            + times.repeat(gf_patch_npoints, axis=0)
+        times_gf = times.repeat(gf_patch_npoints, axis=0) - \
+            times_interp[:, num.newaxis]
 
         # Old, blocky implementation
         # times_gf = times.repeat(gf_patch_npoints, axis=0)
