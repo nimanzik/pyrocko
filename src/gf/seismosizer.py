@@ -164,7 +164,8 @@ def discretize_rect_source(deltas, deltat, time, north, east, depth,
                            strike, dip, length, width,
                            anchor, velocity=None, stf=None,
                            nucleation_x=None, nucleation_y=None,
-                           decimation_factor=1, pointsonly=False):
+                           decimation_factor=1, pointsonly=False,
+                           aggressive_oversampling=False):
 
     if stf is None:
         stf = STF()
@@ -179,8 +180,12 @@ def discretize_rect_source(deltas, deltat, time, north, east, depth,
     ln = length
     wd = width
 
-    nl = max(1, int((1. / decimation_factor) * num.ceil(ln / mindeltagf)))
-    nw = max(1, int((1. / decimation_factor) * num.ceil(wd / mindeltagf)))
+    if aggressive_oversampling:
+        nl = int((2. / decimation_factor) * num.ceil(ln / mindeltagf)) + 1
+        nw = int((2. / decimation_factor) * num.ceil(wd / mindeltagf)) + 1
+    else:
+        nl = int((1. / decimation_factor) * num.ceil(ln / mindeltagf)) + 1
+        nw = int((1. / decimation_factor) * num.ceil(wd / mindeltagf)) + 1
 
     n = int(nl * nw)
 
@@ -1562,6 +1567,12 @@ class RectangularExplosionSource(ExplosionSource):
         default=3500.,
         help='speed of explosion front [m/s]')
 
+    aggressive_oversampling = Bool.T(
+        default=False,
+        help='Aggressive oversampling for basesource discretization. '
+             'When using \'multilinear\' interpolation oversampling has'
+             ' practically no effect.')
+
     def base_key(self):
         return Source.base_key(self) + (self.strike, self.dip, self.length,
                                         self.width, self.nucleation_x,
@@ -2042,6 +2053,12 @@ class RectangularSource(SourceWithDerivedMagnitude):
              ' make the result inaccurate but shorten the necessary'
              ' computation time (use for testing puposes only).')
 
+    aggressive_oversampling = Bool.T(
+        default=False,
+        help='Aggressive oversampling for basesource discretization. '
+             'When using \'multilinear\' interpolation oversampling has'
+             ' practically no effect.')
+
     def __init__(self, **kwargs):
         if 'moment' in kwargs:
             mom = kwargs.pop('moment')
@@ -2109,7 +2126,8 @@ class RectangularSource(SourceWithDerivedMagnitude):
             self.time, self.north_shift, self.east_shift, self.depth,
             self.strike, self.dip, self.length, self.width, self.anchor,
             self.velocity, stf=stf, nucleation_x=nucx, nucleation_y=nucy,
-            decimation_factor=self.decimation_factor)
+            decimation_factor=self.decimation_factor,
+            aggressive_oversampling=self.aggressive_oversampling)
 
         if self.slip is not None:
             if target is not None:
@@ -2380,6 +2398,17 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         optional=True,
         default=False,
         help='Calculate only shear tractions, and omit tensile tractions.')
+
+    smooth_rupture = Bool.T(
+        default=True,
+        help='Smooth the tractions by weighting partially ruptured'
+             ' fault patches.')
+
+    aggressive_oversampling = Bool.T(
+        default=False,
+        help='Aggressive oversampling for basesource discretization. '
+             'When using \'multilinear\' interpolation oversampling has'
+             ' practically no effect.')
 
     def __init__(self, **kwargs):
         if 'moment' in kwargs:
@@ -2883,7 +2912,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         strikes = self.get_patch_attribute('strike')
         dips = self.get_patch_attribute('dip')
 
-        # TODO: Can we use the store's lambda and mu here?
+        # FIXIT: Can we use the store's lambda and mu here?
         lamb = num.mean(self.get_patch_attribute('lamb'))
         mu = num.mean(self.get_patch_attribute('shearmod'))
 
@@ -2918,12 +2947,14 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         gf_patches = []
         for p in self.patches:
+            # FIXIT: discretize w/o discretize_rect_source, and rotate once!
             rect_points, *_ = discretize_rect_source(
                 deltas, store.config.deltat,
                 p.time, p.north_shift, p.east_shift, p.depth,
                 p.strike, p.dip, p.length, p.width,
                 decimation_factor=self.decimation_factor,
-                anchor='center', pointsonly=True)
+                anchor='center', pointsonly=True,
+                aggressive_oversampling=self.aggressive_oversampling)
             gf_patches.append(rect_points)
 
         gf_patch_npoints = num.array(
@@ -2942,13 +2973,16 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         gf_patches_plane[:, 0] -= self.north_shift
         gf_patches_plane[:, 1] -= self.east_shift
         gf_patches_plane[:, 2] -= self.depth
+
+        # FIXIT: if discretized once we do not need this rotation
         gf_patches_plane = num.dot(rotmat.T, gf_patches_plane.T).T
 
         *_, time_interpolator, _ = self.get_vr_time_interpolators(store)
         times_patches = num.array(
             [p.time for p in self.patches]).repeat(
             gf_patch_npoints, axis=0)
-        times_interp = time_interpolator(gf_patches_arr[:, :2]) - times_patches
+        times_interp = times_patches + \
+            (time_interpolator(gf_patches_arr[:, :2]) - times_patches)
         times_gf = times.repeat(gf_patch_npoints, axis=0) - \
             times_interp[:, num.newaxis]
 
@@ -2976,10 +3010,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         # Debug stuff
         total_slip = num.linalg.norm(delta_slip.sum(axis=2), axis=1)
         ds.slip = total_slip.repeat(gf_patch_npoints*ntimes, axis=0)
-
-        ds.time = times_patches.repeat(ntimes)
-
-        # ds.time = times_interp.repeat(ntimes)
+        ds.time = times_gf
 
         return ds
 
@@ -3045,9 +3076,36 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 'The traction vector is of invalid shape.'
                 ' Required shape is (npatches, 3)')
 
+        patch_activation = num.zeros(npatches)
+
         times = self.get_patch_attribute('time') - self.time
         relevant_sources = num.nonzero(times <= time)[0]
         disloc_est = num.zeros_like(tractions)
+
+        if self.smooth_rupture:
+            nx, ny, times, vr, time_interpolator, vr_interpolator = \
+                self.get_vr_time_interpolators(store)
+
+            points_x = time_interpolator.grid[0]
+            points_y = time_interpolator.grid[1]
+            times_eikonal = time_interpolator.values
+
+            for ip, p in enumerate(self.patches):
+                ul = (p.length_pos + p.al1, p.width_pos + p.aw1)
+                lr = (p.length_pos + p.al2, p.width_pos + p.aw2)
+
+                idx_length, *_ = num.where(
+                    (ul[0] <= points_x) & (points_x < lr[0]))
+                idx_width, *_ = num.where(
+                    (points_y >= ul[1]) & (points_y < lr[1]))
+
+                times_patch = times_eikonal[idx_length[0]:idx_length[-1],
+                                            idx_width[0]:idx_width[-1]]
+                patch_activation[ip] = \
+                    (times_patch <= time).sum() / times_patch.size
+
+            relevant_sources = num.nonzero(patch_activation > 0.)[0]
+            tractions *= patch_activation[:, num.newaxis]
 
         if relevant_sources.size == 0:
             return disloc_est
