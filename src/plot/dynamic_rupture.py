@@ -1019,6 +1019,22 @@ class RuptureView(object):
             self._axes.set_xlabel(xlabel)
             self._axes.set_ylabel(ylabel)
 
+    def _draw_scatter(self, x, y, *args, **kwargs):
+        kwargs['linewidth'] = kwargs.get('linewidth', 0)
+        kwargs['marker'] = kwargs.get('marker', 'o')
+        kwargs['markerfacecolor'] = kwargs.get('markerfacecolor',
+                                               mpl_color('skyblue2'))
+        kwargs['markersize'] = kwargs.get('markersize', 6.)
+        kwargs['markeredgecolor'] = kwargs.get('markeredgecolor',
+                                               mpl_color('skyblue3'))
+
+        if self._axes is not None:
+            self._axes.plot(
+                x,
+                y,
+                *args,
+                **kwargs)
+
     def _draw_image(self, l, w, data, *args, **kwargs):
         if self._axes is not None:
             if 'extent' not in kwargs:
@@ -1273,6 +1289,110 @@ class RuptureView(object):
         self._setup(**kwargs)
         self._draw_contour(l, w, data=data, clevel=clevel, **kwargs)
 
+    def draw_source_dynamics(
+            self, variable, store=None, dt=None, *args, **kwargs):
+        ''' Display dynamic source parameter
+
+        Fast inspection possibility for the cumulative moment and the source
+        time function approximation (assuming equal paths between different
+        patches and observation point - valid for an observation point in the
+        far field perpendicular to the source strike), so the cumulative moment
+        rate function.
+
+        :param variable: Dynamic parameter, which shall be plotted. Choose
+            between 'moment_rate' ('stf') or 'cumulative_moment' ('moment')
+        :type variable: string
+        :param store: Greens function store, whose store.config.deltat defines
+            the time increment between two parameter snapshots. If store is not
+            given, the time increment is defined is taken from dt.
+        :type store: optional, :py:class:`pyrocko.gf.store.Store`
+        :param dt: Time increment between two parameter snapshots. If not
+            given, store.config.deltat is used to define dt
+        :type dt: optional, float
+        '''
+
+        v = variable
+
+        data, times = self.source.get_source_moment_rate(store=store, dt=dt)
+
+        if v in ('moment_rate', 'stf'):
+            name, unit = 'dM/dt', 'Nm/s'
+        elif v in ('cumulative_moment', 'moment'):
+            data = num.cumsum(data)
+            name, unit = 'M', 'Nm'
+        else:
+            raise ValueError('No dynamic data for given variable %s found' % v)
+
+        self._setup(xlabel='time [s]',
+                    ylabel='%s / %.2g %s' % (name, num.max(data), unit),
+                    aspect='auto')
+        self._draw_scatter(x=times, y=data/num.max(data), *args, **kwargs)
+
+    def draw_boundary_element_dynamics(
+            self, variable, nx, ny, store=None, dt=None, *args, **kwargs):
+        ''' Display dynamic boundary element / patch parameter
+
+        Fast inspection possibility for different dynamic parameter for a
+        single patch / boundary element. The chosen parameter is plotted for
+        the chosen patch.
+
+        :param variable: Dynamic parameter, which shall be plotted. Choose
+            between 'moment_rate' ('stf') or 'cumulative_moment' ('moment')
+        :type variable: string
+        :param nx: Patch index along strike (range: 0:self.source.nx - 1)
+        :type nx: int
+        :param nx: Patch index downdip (range: 0:self.source.ny - 1)
+        :type nx: int
+        :param store: Greens function store, whose store.config.deltat defines
+            the time increment between two parameter snapshots. If store is not
+            given, the time increment is defined is taken from dt.
+        :type store: optional, :py:class:`pyrocko.gf.store.Store`
+        :param dt: Time increment between two parameter snapshots. If not
+            given, store.config.deltat is used to define dt
+        :type dt: optional, float
+        '''
+
+        v = variable
+        source = self.source
+        idx = nx * source.ny + nx
+
+        m = re.match(r'dislocation_([xyz])', v)
+
+        if v in ('moment_rate', 'cumulative_moment', 'moment'):
+            data, times = source.get_moment_rate(dt=dt)
+        elif 'dislocation' in v or 'slip_rate' == v:
+            ddisloc, times = source.get_delta_slip(dt=dt)
+
+        if v == 'moment_rate':
+            data, times = source.get_moment_rate(store=store, dt=dt)
+            name, unit = 'dM/dt', 'Nm/s'
+        elif v == 'cumulative_moment' or v == 'moment':
+            data, times = source.get_moment_rate(store=store, dt=dt)
+            data = num.cumsum(data, axis=1)
+            name, unit = 'M', 'Nm'
+        elif v == 'slip_rate':
+            data, times = source.get_delta_slip(store=store, dt=dt)
+            data = num.linalg.norm(ddisloc, axis=1) / (times[1] - times[0])
+            name, unit = 'du/dt', 'm/s'
+        elif v == 'dislocation':
+            data, times = source.get_delta_slip(store=store, dt=dt)
+            data = num.linalg.norm(num.cumsum(data, axis=2), axis=1)
+            name, unit = 'du', 'm'
+        elif m:
+            data, times = source.get_delta_slip(store=store, dt=dt)
+            data = num.cumsum(data, axis=2)[:, c2disl[m.group(1)], :]
+            name, unit = 'du%s' % m.group(1), 'm'
+        else:
+            raise ValueError('No dynamic data for given variable %s found' % v)
+
+        dt = times[1] - times[0]
+
+        self._setup(xlabel='time [s]',
+                    ylabel='%s / %.2g %s' % (name, num.max(data), unit),
+                    aspect='auto')
+        self._draw_scatter(x=times, y=data[idx, :]/num.max(data),
+                           *args, **kwargs)
+
     def save(self, filename, dpi=100.):
         ''' Save plot
 
@@ -1454,14 +1574,6 @@ def rupture_movie(
     shutil.rmtree(temp_path)
 
 
-class STF(object):
-    pass
-    '''
-    ToDo write STF viewer, single BE slip rate, slip, moment rate, cum moment
-
-    '''
-
-
 __all__ = [
     'make_colormap',
     'clear_temp',
@@ -1469,4 +1581,6 @@ __all__ = [
     'xy_to_lw',
     'SourceError',
     'RuptureMap',
-    'RuptureView']
+    'RuptureView',
+    'rupture_movie',
+    'render_movie']
