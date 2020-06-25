@@ -10,6 +10,7 @@ from .store import *  # noqa
 from .builder import *  # noqa
 from .seismosizer import *  # noqa
 from .targets import *  # noqa
+from .uncertainty import *  # noqa
 from pyrocko.util import parse_md
 
 __doc__ = parse_md(__file__)
