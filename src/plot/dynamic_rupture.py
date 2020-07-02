@@ -1541,11 +1541,17 @@ def rupture_movie(
     kwargs_base = dict([k for k in kwargs.items() if k[0] in attrs_base])
     kwargs_plt = dict([k for k in kwargs.items() if k[0] not in kwargs_base])
 
+    if 'clim' in kwargs_plt:
+        data = num.clip(data, kwargs_plt['clim'][0], kwargs_plt['clim'][1])
+    else:
+        kwargs_plt['clim'] = [num.min(data), num.max(data)]
+
     if 'label' not in kwargs_plt:
-        vmax = num.max([num.min(data), num.max(data)])
+        vmax = num.max(num.abs(kwargs_plt['clim']))
         data /= vmax
 
         kwargs_plt['label'] = '%s / %.2g %s' % (name, vmax, unit)
+        kwargs_plt['clim'] = [i / vmax for i in kwargs_plt['clim']]
 
     temp_path = tempfile.mkdtemp()
     fns_temp = [op.join(temp_path, 'f%09d.png' % (it + 1))
@@ -1554,7 +1560,7 @@ def rupture_movie(
 
     for it, (t, ft) in enumerate(zip(times, fns_temp)):
         plt = plt_base(source=source, **kwargs_base)
-        plt.draw_dynamic_data(data[:, it], clim=[num.min(data), num.max(data)],
+        plt.draw_dynamic_data(data[:, it],
                               **kwargs_plt)
         plt.draw_time_contour(store, clevel=[t])
 
