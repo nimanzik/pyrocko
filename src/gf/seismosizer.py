@@ -38,6 +38,7 @@ guts_prefix = 'pf'
 
 d2r = math.pi / 180.
 r2d = 180. / math.pi
+km = 1e3
 
 logger = logging.getLogger('pyrocko.gf.seismosizer')
 
@@ -2286,11 +2287,11 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         help='dip angle in [deg], measured downward from horizontal')
 
     length = Float.T(
-        default=0.,
+        default=10.*km,
         help='length of rectangular source area [m]')
 
     width = Float.T(
-        default=0.,
+        default=5.*km,
         help='width of rectangular source area [m]')
 
     anchor = StringChoice.T(
@@ -2620,7 +2621,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         :rtype: int, int, :py:class:`numpy.ndarray`, :py:class:`numpy.ndarray`
         '''
 
-        vs_min = store.config.earthmodel_1d.min(get='vs')
+        vs_min = max(store.config.earthmodel_1d.min(get='vs'), 1.)
 
         delta = self.eikonal_decimation * num.min([
             num.min(store.config.deltat * vs_min / 2.),
@@ -2892,6 +2893,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         delta_slip, times = self.get_delta_slip(store)
         ntimes = times.size
         npatches = len(self.patches)
+        src_shift = num.array([self.north_shift, self.east_shift])
 
         times += self.time
         times = num.tile(times, npatches).reshape(npatches, -1)
@@ -2912,7 +2914,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         strikes = self.get_patch_attribute('strike')
         dips = self.get_patch_attribute('dip')
 
-        # FIXIT: Can we use the store's lambda and mu here?
         lamb = num.mean(self.get_patch_attribute('lamb'))
         mu = num.mean(self.get_patch_attribute('shearmod'))
 
@@ -2939,7 +2940,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 [num.linalg.eigvalsh(pmt.symmat6(*m6))
                  for m6 in m6s.reshape(-1, 6)])
             patch_mom = num.linalg.norm(patch_mom, axis=1) / num.sqrt(2.)
-            m6s *= moment / patch_mom.sum()
+            cum_mom = patch_mom.sum()
+            if cum_mom != 0.:
+                m6s *= moment / patch_mom.sum()
 
         # Projection onto GFStore spacing
         deltas = tuple(
@@ -2981,8 +2984,11 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         times_patches = num.array(
             [p.time for p in self.patches]).repeat(
             gf_patch_npoints, axis=0)
-        times_interp = times_patches + \
-            (time_interpolator(gf_patches_arr[:, :2]) - times_patches)
+
+        times_interp = \
+            times_patches \
+            + time_interpolator(gf_patches_plane[:, :2]) \
+            - times_patches
         times_gf = times.repeat(gf_patch_npoints, axis=0) - \
             times_interp[:, num.newaxis]
 
