@@ -119,12 +119,12 @@ class RectangularTaper(AbstractTractionField):
         raise AttributeError('unknown type %s' % self.type)
 
 
-class RheologicTaper(AbstractTractionField):
-    begin = Float.T(
+class DepthTaper(AbstractTractionField):
+    depth_start = Float.T(
         help='Depth where the taper begins [km]')
 
-    end = Float.T(
-        help='Depth where taper ends [km]')
+    depth_stop = Float.T(
+        help='Depth where taper stops, and drops to 0. [km]')
 
     type = StringChoice.T(
         choices=('linear', ),
@@ -132,12 +132,12 @@ class RheologicTaper(AbstractTractionField):
         help='Type of the taper, default "linear"')
 
     def get_tractions(self, nx, ny, patches):
-        assert self.end > self.begin
+        assert self.depth_stop > self.depth_start
         depths = num.array([p.depth for p in patches])
 
         if self.type == 'linear':
-            slope = self.end - self.begin
-            depths -= self.end
+            slope = self.depth_stop - self.depth_start
+            depths -= self.depth_stop
             depths /= -slope
             depths[depths > 1.] = 1.
             depths[depths < 0.] = 0.
@@ -175,7 +175,7 @@ if __name__ == '__main__':
         components=[
             UniformTractions(traction=45e3),
             RectangularTaper(),
-            RheologicTaper(begin=10.*km, end=30.*km)
+            DepthTaper(depth_start=10.*km, depth_stop=30.*km)
         ])
 
     plot_tractions(tractions)
