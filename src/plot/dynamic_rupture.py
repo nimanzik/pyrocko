@@ -1218,7 +1218,6 @@ class RuptureView(object):
         l /= km
         w /= km
 
-        self._setup(**kwargs)
         self.draw_point(l, w, marker='o', **kwargs)
 
     def draw_dislocation(self, time=None, component='', **kwargs):
@@ -1244,7 +1243,6 @@ class RuptureView(object):
         kwargs['label'] = kwargs.get(
             'label', 'u%s [m]' % (component))
 
-        self._setup(**kwargs)
         self.draw_dynamic_data(data, **kwargs)
 
     def draw_dislocation_contour(
