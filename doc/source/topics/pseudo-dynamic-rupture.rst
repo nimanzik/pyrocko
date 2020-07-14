@@ -5,10 +5,10 @@ Pseudo Dynamic Rupture - *A stress-based self-similar finite source model*
 Introduction
 ============
 
-Physics-based, dynamic rupture models, which rely on few parameters only, are needed to allow a realistic forward modeling and to reduce the effort and non-uniqueness of the inversion. Our study develops a simplified, dynamic, semi-analytical rupture model suited for wavefield simulation and inversion. The rupture builds on the class of self-similar crack models. On one hand it is approximative as it neglects inertia and so far the details of frictional effects, and treats the rupture front growth in a simplified way.  On the other hand, it is complete as the slip fulfils the boundary condition on the broken plane for every instantaneous rupture front geometry and applied stress. 
+Physics-based, dynamic rupture models, which rely on few parameters only, are needed to allow a realistic forward modelling and to reduce the effort and non-uniqueness of the inversion. The ``PseudoDynamicRupture`` is a simplified, dynamic, semi-analytical rupture model suited for wavefield and static displacement simulations and earthquake source inversion. The rupture builds on the class of self-similar crack models. On one hand it is approximative as it neglects inertia and so far the details of frictional effects, and treats the rupture front growth in a simplified way.  On the other hand, it is complete as the slip fulfils the boundary condition on the broken plane for every instantaneous rupture front geometry and applied stress. 
 
 .. contents :: Content
-  :depth: 2
+  :depth: 3
 
 Source Implementation details
 =============================
@@ -30,23 +30,23 @@ Traction and stress field parametrisation
 
 The rupture plane can be exposed to different stress/traction field models and abstract modifiers to these fields. These fields can be used independently or be combined into a composition model.
 
-Available models:
+Traction models:
 
-    * ``UniformTractions``
-    * ``HomogeneousTractions``
+    * :class:`~pyrocko.gf.tractions.UniformTractions`
+    * :class:`~pyrocko.gf.tractions.HomogeneousTractions`
 
-Abstract models:
+Abstract traction models, modifying the the traction model:
 
-    * ``RectangularTaper``
-    * ``DepthTaper``
+    * :class:`~pyrocko.gf.tractions.RectangularTaper`
+    * :class:`~pyrocko.gf.tractions.DepthTaper`
 
 Forward calculation of waveforms and static displacement
 --------------------------------------------------------
 
-Details how the source model can be used in Pyrocko-GF can are layed out here: :doc:`pyrocko-gf`.
+Details how the source model can be used in Pyrocko-GF can are layed out in :doc:`pyrocko-gf`.
 
-Plotting source parameters
-==========================
+Derived source parameters and plotting
+======================================
 
 Slip distribution
 -----------------
@@ -54,5 +54,11 @@ Slip distribution
 Rupture evolution
 -----------------
 
-Moment release
---------------
+Moment rate function
+--------------------
+
+Radiated seismic energy
+-----------------------
+
+Stress intensity
+----------------
