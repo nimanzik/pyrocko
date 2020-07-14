@@ -2867,7 +2867,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         self.patches = source_disc
 
-    def discretize_basesource(self, store, target=None):
+    def discretize_basesource(self, store, target=None, blocky=False):
         '''
         Prepare source for synthetic waveform calculation
 
@@ -2893,9 +2893,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         delta_slip, times = self.get_delta_slip(store)
         ntimes = times.size
         npatches = len(self.patches)
-        src_shift = num.array([self.north_shift, self.east_shift])
 
-        times += self.time
         times = num.tile(times, npatches).reshape(npatches, -1)
 
         slip_strike = delta_slip[:, 0::3, :].squeeze(axis=1)
@@ -2949,7 +2947,8 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             (self.length/self.nx, self.width/self.ny, *store.config.deltas))
 
         gf_patches = []
-        for p in self.patches:
+        patch_times = num.zeros(npatches)
+        for ip, p in enumerate(self.patches):
             # FIXIT: discretize w/o discretize_rect_source, and rotate once!
             rect_points, *_ = discretize_rect_source(
                 deltas, store.config.deltat,
@@ -2959,9 +2958,11 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 anchor='center', pointsonly=True,
                 aggressive_oversampling=self.aggressive_oversampling)
             gf_patches.append(rect_points)
+            patch_times[ip] = p.time
 
         gf_patch_npoints = num.array(
             [gf_patch.shape[0] for gf_patch in gf_patches], dtype=num.intp)
+        patch_times -= self.time
 
         # Scale moment tensors
         m6s /= gf_patch_npoints[:, num.newaxis, num.newaxis]
@@ -2972,28 +2973,26 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         # Rotate the fault plane onto the surface (local x-y coord system)
         gf_patches_plane = gf_patches_arr.copy()
         rotmat = num.asarray(
-            pmt.euler_to_matrix(-self.dip*d2r, -self.strike*d2r, 0.))
+            pmt.euler_to_matrix(self.dip*d2r, self.strike*d2r, 0.))
         gf_patches_plane[:, 0] -= self.north_shift
         gf_patches_plane[:, 1] -= self.east_shift
         gf_patches_plane[:, 2] -= self.depth
 
         # FIXIT: if discretized once we do not need this rotation
-        gf_patches_plane = num.dot(rotmat.T, gf_patches_plane.T).T
+        gf_patches_plane = num.dot(rotmat, gf_patches_plane.T).T
 
         *_, time_interpolator, _ = self.get_vr_time_interpolators(store)
-        times_patches = num.array(
-            [p.time for p in self.patches]).repeat(
-            gf_patch_npoints, axis=0)
 
-        times_interp = \
-            times_patches \
-            + time_interpolator(gf_patches_plane[:, :2]) \
-            - times_patches
-        times_gf = times.repeat(gf_patch_npoints, axis=0) - \
-            times_interp[:, num.newaxis]
+        times_patches = patch_times.repeat(gf_patch_npoints, axis=0)
+        times_interp = time_interpolator(gf_patches_plane[:, :2])
+        times_gf = times.repeat(gf_patch_npoints, axis=0) + \
+            (times_interp - patch_times.min())[:, num.newaxis]
 
         # Old, blocky implementation
-        # times_gf = times.repeat(gf_patch_npoints, axis=0)
+        if blocky:
+            times_gf = times.repeat(gf_patch_npoints, axis=0)
+
+        times_gf += self.time
 
         gf_points = gf_patches_arr.repeat(ntimes, axis=0)
 
@@ -3163,7 +3162,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 'Please define only the store or the dt argument.')
 
         if store:
-            dt = store.config.deltat
+            dt = store.config.deltat / 2
 
         if not dt:
             raise AttributeError('Please give a GF store or set dt.')
@@ -3185,7 +3184,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         return delta_disloc_est, calc_times
 
-    def get_moment_rate(self, *args, **kwargs):
+    def get_moment_rate_patches(self, *args, **kwargs):
         '''
         Get scalar seismic moment rate for each boundary element individually
 
@@ -3209,6 +3208,30 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         dA = num.array([p.length*p.width for p in self.patches])
 
         return shear_mod * slip_change * dA[:, num.newaxis], calc_times
+
+    def get_moment_rate(self, store, deltat=None):
+        if deltat is None:
+            deltat = store.config.deltat / 2
+
+        sources = self.discretize_basesource(store)
+        moments = num.array(
+            [num.linalg.eigvalsh(pmt.symmat6(*m6))
+             for m6 in sources.m6s])
+        moments = num.linalg.norm(moments, axis=1) / num.sqrt(2.)
+
+        times = sources.times - self.time
+        duration = times.max() - times.min()
+        nbins = math.ceil(duration / deltat)
+
+        mom_rate, mom_times = num.histogram(
+            times, bins=nbins,
+            weights=moments)
+
+        mom_times = mom_times[:-1] + deltat/2
+        return mom_rate, mom_times
+
+    def get_seismic_energy(self, store):
+        mom_rate, mom_times = self.get_moment_rate(store)
 
     def get_source_moment_rate(self, *args, **kwargs):
         '''
