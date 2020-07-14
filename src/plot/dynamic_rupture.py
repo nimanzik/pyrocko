@@ -1460,7 +1460,7 @@ def rupture_movie(
         source,
         store,
         variable,
-        fn_path='',
+        fn_path='.',
         prefix='',
         plot_type='map',
         dt=None,
@@ -1501,6 +1501,7 @@ def rupture_movie(
     '''
 
     v = variable
+    source.discretize_basesource(store)
 
     if not prefix:
         prefix = v
@@ -1553,31 +1554,29 @@ def rupture_movie(
         kwargs_plt['label'] = '%s / %.2g %s' % (name, vmax, unit)
         kwargs_plt['clim'] = [i / vmax for i in kwargs_plt['clim']]
 
-    temp_path = tempfile.mkdtemp()
-    fns_temp = [op.join(temp_path, 'f%09d.png' % (it + 1))
-                for it, _ in enumerate(times)]
-    fn_temp_path = op.join(temp_path, 'f%09d.png')
+    with tempfile.TemporaryDirectory(suffix='pyrocko') as temp_path:
+        fns_temp = [op.join(temp_path, 'f%09d.png' % (it + 1))
+                    for it, _ in enumerate(times)]
+        fn_temp_path = op.join(temp_path, 'f%09d.png')
 
-    for it, (t, ft) in enumerate(zip(times, fns_temp)):
-        plt = plt_base(source=source, **kwargs_base)
-        plt.draw_dynamic_data(data[:, it],
-                              **kwargs_plt)
-        plt.draw_time_contour(store, clevel=[t])
+        for it, (t, ft) in enumerate(zip(times, fns_temp)):
+            plt = plt_base(source=source, **kwargs_base)
+            plt.draw_dynamic_data(data[:, it],
+                                  **kwargs_plt)
+            plt.draw_time_contour(store, clevel=[t])
 
-        plt.save(ft)
+            plt.save(ft)
 
-    render_movie(fn_temp_path,
-                 output_path=op.join(
-                     fn_path, '%s_%s_movie.mp4' % (prefix, plot_type)))
+        render_movie(fn_temp_path,
+                     output_path=op.join(
+                         fn_path, '%s_%s_movie.mp4' % (prefix, plot_type)))
 
-    if store_images:
-        fns = [op.join(fn_path, '%s_%s_%g.png' % (prefix, plot_type, t))
-               for t in times]
+        if store_images:
+            fns = [op.join(fn_path, '%s_%s_%g.png' % (prefix, plot_type, t))
+                   for t in times]
 
-        for ft, f in zip(fns_temp, fns):
-            shutil.move(ft, f)
-
-    shutil.rmtree(temp_path)
+            for ft, f in zip(fns_temp, fns):
+                shutil.move(ft, f)
 
 
 __all__ = [
