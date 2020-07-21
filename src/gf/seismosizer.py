@@ -2894,11 +2894,14 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         delta_slip, slip_times = self.get_slip(store)
         npatches = self.nx * self.ny
         ntimes = slip_times.size
+        anch_x, anch_y = map_anchor[self.anchor]
 
-        patch_x = num.array([p.length_pos for p in self.patches])\
-            .reshape(self.nx, self.ny)
-        patch_y = num.array([p.width_pos for p in self.patches])\
-            .reshape(self.nx, self.ny)
+        pln = self.length / self.nx
+        pwd = self.width / self.ny
+
+        patch_coords = num.array([
+            (p.length_pos, p.width_pos)
+            for p in self.patches]).reshape(self.nx, self.ny, 2)
 
         # boundary condition is zero-slip
         slip_grid = num.zeros((self.nx+2, self.ny+2, ntimes+1, 3))
@@ -2906,14 +2909,16 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             delta_slip.reshape(self.nx, self.ny, ntimes, 3)
 
         coords_x = num.empty(self.nx + 2)
-        coords_x[0] = -self.length / 2
-        coords_x[1:-1] = patch_x[:, 0]
-        coords_x[-1] = self.length / 2
+        coords_x[1:-1] = patch_coords[:, 0, 0]
+        coords_x[0] = coords_x[1] - pln/2
+        coords_x[-1] = coords_x[-2] + pln/2
 
         coords_y = num.empty(self.ny + 2)
-        coords_y[0] = -self.width / 2
-        coords_y[1:-1] = patch_y[0, :]
-        coords_y[-1] = self.width / 2
+        coords_y[1:-1] = patch_coords[0, :, 1]
+        coords_y[0] = coords_y[1] - pwd/2
+        coords_y[-1] = coords_y[-2] + pwd/2
+
+        print(coords_x, coords_y)
 
         slip_interp = RegularGridInterpolator(
             (coords_x, coords_y, num.concatenate(([0.], slip_times))),
@@ -2923,9 +2928,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         mindeltagf = min(tuple(
             (self.length / self.nx, self.width / self.ny,
              *store.config.deltas)))
-
-        pln = self.length / self.nx
-        pwd = self.width / self.ny
 
         nl = int((1./self.decimation_factor) * num.ceil(pln / mindeltagf)) + 1
         nw = int((1./self.decimation_factor) * num.ceil(pwd / mindeltagf)) + 1
@@ -2948,20 +2950,27 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             num.arange(self.ny)*pwd + pwd/2, self.nx) - self.width / 2
 
         base_coords -= center_coords.repeat(nsrc_patch, axis=0)
-        nbaseslocs = base_coords.shape[0]
+        nbaselocs = base_coords.shape[0]
 
         base_interp = base_coords.repeat(ntimes, axis=0)
-        base_times = num.tile(slip_times, nbaseslocs)
+        base_times = num.tile(slip_times, nbaselocs)
+        base_interp[:, 0] -= anch_x * self.length/2
+        base_interp[:, 1] -= anch_y * self.width/2
         base_interp[:, 2] = base_times
+
         nbasesrcs = base_interp.shape[0]
 
-        delta_slip = slip_interp(base_interp).reshape(nbaseslocs, ntimes, 3)
+        print(base_interp[:, 0].min(), base_interp[:, 1].min(), base_interp[:, 2].min())
+        print(base_interp[:, 0].max(), base_interp[:, 1].max(), base_interp[:, 2].max())
 
-        if True:
+        delta_slip = slip_interp(base_interp).reshape(nbaselocs, ntimes, 3)
+
+        if False:
             try:
                 import matplotlib.pyplot as plt
+                coords = base_coords.copy()
                 norm = num.sum(num.linalg.norm(delta_slip, axis=2), axis=1)
-                plt.scatter(base_coords[:, 0], base_coords[:, 1], c=norm)
+                plt.scatter(coords[:, 0], coords[:, 1], c=norm)
                 plt.show()
             except AttributeError:
                 pass
@@ -2977,8 +2986,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         if self.slip is not None:
             norm = num.sum(num.linalg.norm(delta_slip, axis=2), axis=1).max()
             delta_slip *= self.slip / norm
-
-
 
         slip_strike = delta_slip[:, :, 0].ravel()
         slip_dip = delta_slip[:, :, 1].ravel()
