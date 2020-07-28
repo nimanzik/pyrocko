@@ -2896,6 +2896,8 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         ntimes = slip_times.size
         anch_x, anch_y = map_anchor[self.anchor]
 
+        # max_slip = num.sum(num.linalg.norm(delta_slip, axis=2), axis=1).max()
+
         pln = self.length / self.nx
         pwd = self.width / self.ny
 
@@ -2917,8 +2919,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         coords_y[1:-1] = patch_coords[0, :, 1]
         coords_y[0] = coords_y[1] - pwd/2
         coords_y[-1] = coords_y[-2] + pwd/2
-
-        print(coords_x, coords_y)
 
         slip_interp = RegularGridInterpolator(
             (coords_x, coords_y, num.concatenate(([0.], slip_times))),
@@ -2959,10 +2959,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         base_interp[:, 2] = base_times
 
         nbasesrcs = base_interp.shape[0]
-
-        print(base_interp[:, 0].min(), base_interp[:, 1].min(), base_interp[:, 2].min())
-        print(base_interp[:, 0].max(), base_interp[:, 1].max(), base_interp[:, 2].max())
-
         delta_slip = slip_interp(base_interp).reshape(nbaselocs, ntimes, 3)
 
         if False:
@@ -2991,10 +2987,10 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         slip_dip = delta_slip[:, :, 1].ravel()
         slip_norm = delta_slip[:, :, 2].ravel()
 
-        slip_shear = num.sqrt(slip_strike**2 + slip_dip**2)
+        slip_shear = num.linalg.norm([slip_strike, slip_dip], axis=0)
         slip_rake = num.arctan2(slip_dip, slip_strike)
 
-        patch_area = self.patches[0].area
+        moment_norm = (self.length * self.width) / nbasesrcs
 
         lamb = num.mean(self.get_patch_attribute('lamb'))
         mu = num.mean(self.get_patch_attribute('shearmod'))
@@ -3005,7 +3001,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 [[lamb * du_n, 0., -mu * du_s],
                  [0., lamb * du_n, 0.],
                  [-mu * du_s, 0., (lamb + 2. * mu) * du_n]])
-            momentmat *= patch_area
+            # momentmat *= moment_norm
             return pmt.to6(rotmat.T * momentmat * rotmat)
 
         m6s = num.array([
@@ -3013,6 +3009,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 self.strike*d2r, self.dip*d2r, rake=slip_rake[im],
                 du_s=slip_shear[im], du_n=slip_norm[im])
             for im in range(nbasesrcs)])
+        m6s *= moment_norm
 
         if self.magnitude is not None:
             moment = pmt.magnitude_to_moment(self.magnitude)
@@ -3147,9 +3144,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             coef_mat=self.coef_mat[indices_disl, :][:, indices_disl],
             pure_shear=self.pure_shear, nthreads=self.nthreads,
             **kwargs)
-
-        if self.slip and scale_slip:
-            disloc_est *= self.slip / num.linalg.norm(disloc_est, axis=1).max()
 
         return disloc_est
 
