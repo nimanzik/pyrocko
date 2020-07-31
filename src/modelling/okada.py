@@ -310,9 +310,13 @@ class DislocationInverter(object):
             used for BEM
         :type source_patches_list: list of
             :py:class:`pyrocko.modelling.OkadaSource`
-        :param pure_shear: Flag, if also opening mode shall be taken into
-            account (False) or the fault is described as pure shear (True).
-        :type pure_shear: optional, Bool
+        :param pure_shear: Shall only shear forces be taken into account,
+            or additionally include opening, default False.
+        :type pure_shear: optional, bool
+        :param rotate_sdn: Rotation towards strike, dip, normal, default True.
+        :type pure_shear: optional, bool
+        :param nthreads: Number of threads, default 1
+        :type nthreads: optional, int
 
         :return: coefficient matrix for all sources
         :rtype: :py:class:`numpy.ndarray`,
@@ -602,6 +606,7 @@ class DislocationInverter(object):
             coef_mat=None,
             source_list=None,
             pure_shear=False,
+            epsilon=None,
             nthreads=1,
             **kwargs):
         '''
@@ -626,6 +631,13 @@ class DislocationInverter(object):
             used for BEM
         :type source_list: optional, list of
             :py:class:`pyrocko.modelling.OkadaSource`
+        :param epsilon: regularize small values from the coefficient matrix,
+            default None.
+        :type epsilon: optional, float
+
+        :param nthreads: number of threads for the least squares inversion,
+            default 1
+        :type nthreads: optional, int
 
         :return: inverted displacements (u_strike, u_dip , u_tensile) for each
             source patch. order: [
@@ -639,6 +651,9 @@ class DislocationInverter(object):
             coef_mat = DislocationInverter.get_coef_mat(
                 source_list, pure_shear=pure_shear, nthreads=nthreads,
                 **kwargs)
+
+        if epsilon is not None:
+            coef_mat[coef_mat < epsilon] = 0.
 
         idx = num.arange(0, coef_mat.shape[0])
         if pure_shear:

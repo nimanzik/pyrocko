@@ -83,13 +83,13 @@ class UniformTractions(TractionField):
 
 
 class HomogeneousTractions(TractionField):
-    t_strike = Float.T(
+    strike = Float.T(
         default=1.,
         help='Tractions in strike direction [Pa]')
-    t_dip = Float.T(
+    dip = Float.T(
         default=1.,
         help='Traction in dip direction (up) [Pa]')
-    t_normal = Float.T(
+    normal = Float.T(
         default=1.,
         help='Traction in normal direction [Pa]')
 
@@ -97,7 +97,7 @@ class HomogeneousTractions(TractionField):
         npatches = nx * ny
 
         return num.tile(
-            (self.t_strike, self.t_dip, self.t_normal), npatches) \
+            (self.strike, self.dip, self.normal), npatches) \
             .reshape(-1, 3)
 
 
