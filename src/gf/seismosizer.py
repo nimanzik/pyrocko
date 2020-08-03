@@ -29,7 +29,7 @@ from pyrocko.model import Location
 from pyrocko.modelling import OkadaSource, DislocationInverter
 
 from . import meta, store, ws
-from .tractions import TractionField, HomogeneousTractions
+from .tractions import TractionField, HomogeneousTractions, DirectedTractions
 from .targets import Target, StaticTarget, SatelliteTarget
 
 pjoin = os.path.join
@@ -2424,8 +2424,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         SourceWithDerivedMagnitude.__init__(self, **kwargs)
         self._interpolators = {}
         self.check_conflicts()
-        self.patch_activation = []
-        self.rsources = []
 
     @property
     def nucleation_x(self):
@@ -2486,13 +2484,18 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         self.nucleation_time__ = nucleation_time
 
     def get_tractions(self):
-        return self.tractions.get_tractions(self.nx, self.ny, self.patches)
+        if self.rake is not None:
+            tractions = DirectedTractions(rake=self.rake)
+        else:
+            tractions = self.tractions
+        return tractions.get_tractions(self.nx, self.ny, self.patches)
 
     def base_key(self):
         return SourceWithDerivedMagnitude.base_key(self) + (
             self.magnitude,
             self.strike,
             self.dip,
+            self.rake,
             self.length,
             self.width,
             float(self.nucleation_x.mean()),
@@ -2502,6 +2505,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             self.pure_shear)
 
     def check_conflicts(self):
+        if self.tractions and self.rake:
+            raise AttributeError(
+                'tractions and rake are mutually exclusive')
         if self.magnitude is not None and self.slip is not None:
             raise DerivedMagnitudeError(
                 'definition of slip and magnitude is mutually exclusive')
@@ -3109,21 +3115,22 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             nx, ny, times, vr, time_interpolator, vr_interpolator = \
                 self.get_vr_time_interpolators(store)
 
+            # Getting the native Eikonal grid, bit hackish
             points_x = time_interpolator.grid[0]
             points_y = time_interpolator.grid[1]
             times_eikonal = time_interpolator.values
 
             for ip, p in enumerate(self.patches):
-                ll = (p.length_pos + p.al1, p.width_pos + p.aw1)
-                ur = (p.length_pos + p.al2, p.width_pos + p.aw2)
+                ul = (p.length_pos + p.al1, p.width_pos + p.aw1)
+                lr = (p.length_pos + p.al2, p.width_pos + p.aw2)
+
 
                 idx_length, *_ = num.where(
-                    (ll[0] <= points_x) & (points_x < ur[0]))
+                    (points_x >= ul[0]) & (points_x < lr[0]))
                 idx_width, *_ = num.where(
-                    (points_y >= ll[1]) & (points_y < ur[1]))
+                    (points_y >= ul[1]) & (points_y < lr[1]))
 
-                times_patch = times_eikonal[idx_length[0]:idx_length[-1],
-                                            idx_width[0]:idx_width[-1]]
+                times_patch = times_eikonal[num.ix_(idx_length, idx_width)]
                 patch_activation[ip] = \
                     (times_patch <= time).sum() / times_patch.size
 
@@ -3131,8 +3138,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         if relevant_sources.size == 0:
             return disloc_est
-
-        self.rsources.append(relevant_sources.size)
 
         indices_disl = num.repeat(relevant_sources * 3, 3)
         indices_disl[1::3] += 1

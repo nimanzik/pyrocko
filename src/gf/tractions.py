@@ -4,6 +4,8 @@ from pyrocko.guts import Object, Float, List, StringChoice
 
 logger = logging.getLogger('pyrocko.gf.tractions')
 km = 1e3
+d2r = num.pi/180.
+r2d = 180./num.pi
 
 
 def tukey_window(N, alpha):
@@ -99,6 +101,26 @@ class HomogeneousTractions(TractionField):
         return num.tile(
             (self.strike, self.dip, self.normal), npatches) \
             .reshape(-1, 3)
+
+
+class DirectedTractions(TractionField):
+    rake = Float.T(
+        default=0.,
+        help='rake angle in [deg], '
+             'measured counter-clockwise from right-horizontal '
+             'in on-plane view. Rake is translated into homogenous tractions '
+             'in strike and up-dip direction.')
+    traction = Float.T(
+        default=1.,
+        help='Traction in rake direction [Pa]')
+
+    def get_tractions(self, nx, ny, patches=None):
+        npatches = nx * ny
+        normal = 0.
+        strike = num.cos(self.rake*d2r) * self.traction
+        dip = num.sin(self.rake*d2r) * self.traction
+
+        return num.tile((strike, dip, normal), npatches).reshape(-1, 3)
 
 
 class RectangularTaper(AbstractTractionField):

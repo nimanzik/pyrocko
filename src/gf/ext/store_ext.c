@@ -1028,6 +1028,7 @@ static store_error_t store_calc_timeseries(
     size_t ireceiver, isource, iip, nip, icomponent, isummand, nsummands_max, nsummands;
     float64_t ws_this[cscheme->ncomponents*cscheme->nsummands_max];
     uint64_t irecord_bases[VICINITY_NIP_MAX];
+    float64_t weights_ip[VICINITY_NIP_MAX];
 
     nsummands_max = cscheme->nsummands_max;
     nip = mscheme->vicinity_nip;

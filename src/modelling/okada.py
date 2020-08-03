@@ -668,10 +668,17 @@ class DislocationInverter(object):
         threadpool_limits = get_threadpool_limits()
 
         with threadpool_limits(limits=nthreads, user_api='blas'):
-            disloc_est[idx] = num.linalg.multi_dot([num.linalg.inv(
-                num.dot(coef_mat_in.T, coef_mat_in)),
-                coef_mat_in.T,
-                stress_field[idx]])
+            try:
+                disloc_est[idx] = num.linalg.multi_dot([num.linalg.inv(
+                    num.dot(coef_mat_in.T, coef_mat_in)),
+                    coef_mat_in.T,
+                    stress_field[idx]])
+            except num.linalg.LinAlgError as e:
+                logger.warning('Linear inversion failed!')
+                logger.warning(
+                    'coef_mat: %s\nstress_field: %s',
+                    coef_mat_in, stress_field[idx])
+                raise e
             return disloc_est.reshape(-1, 3)
 
 
