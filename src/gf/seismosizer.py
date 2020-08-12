@@ -2369,7 +2369,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         help='List of all boundary elements/sub faults/fault patches')
 
     tractions = TractionField.T(
-        default=HomogeneousTractions.D(),
+        optional=True,
         help='Traction field the rupture plane is exposed to.')
 
     coef_mat = Array.T(
@@ -2508,6 +2508,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         if self.tractions and self.rake:
             raise AttributeError(
                 'tractions and rake are mutually exclusive')
+        if self.tractions is None and self.rake is None:
+            raise AttributeError(
+                'No tractions or rake are defined')
         if self.magnitude is not None and self.slip is not None:
             raise DerivedMagnitudeError(
                 'definition of slip and magnitude is mutually exclusive')
@@ -2632,8 +2635,21 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             (latlondepth) and coordinates (xy on fault) for discrete points
         :rtype: int, int, :py:class:`numpy.ndarray`, :py:class:`numpy.ndarray`
         '''
+        anch_x, anch_y = map_anchor[self.anchor]
 
-        vs_min = max(store.config.earthmodel_1d.min(get='vs'), 1.)
+        npoints = int(self.width // km) + 1
+        points = num.zeros((npoints, 3))
+        points[:, 1] = num.linspace(-1., 1., npoints)
+        points[:, 1] = (points[:, 1] - anch_y) * self.width/2 + self.depth
+
+        rotmat = num.asarray(
+            pmt.euler_to_matrix(self.dip*d2r, self.strike*d2r, 0.0))
+        points = num.dot(rotmat.T, points.T).T
+
+        vs_min = store.config.get_vs(
+            self.lat, self.lon, points,
+            interpolation='nearest_neighbor')
+        vs_min = max(vs_min.min(), .5*km)
 
         delta = self.eikonal_decimation * num.min([
             num.min(store.config.deltat * vs_min / 2.),
@@ -2647,17 +2663,21 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             delta = self.length / nx
             ny = int(num.floor(self.width / delta)) + 1
 
+        nx = nx if nx > self.nx else self.nx
+        ny = ny if ny > self.ny else self.ny
+
         nx += 1
         ny += 1
 
         points_xy = num.zeros((nx * ny, 2))
         points_xy[:, 0] = num.repeat(num.linspace(-1., 1., nx), ny)
         points_xy[:, 1] = num.tile(num.linspace(-1., 1., ny), nx)
-
-        return nx, ny, delta, self.points_on_source(
+        points = self.points_on_source(
             points_x=points_xy[:, 0],
             points_y=points_xy[:, 1],
-            **kwargs), points_xy
+            **kwargs)
+
+        return nx, ny, delta, points, points_xy
 
     def _discretize_rupture_v(self, store, interpolation='nearest_neighbor',
                               points=None):
@@ -2712,16 +2732,14 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             :py:class:`numpy.ndarray`, ``(n_points_dip, n_points_strike)``,
             :py:class:`numpy.ndarray`, ``(n_points_dip, n_points_strike)``
         '''
-
         nx, ny, delta, points, points_xy = self._discretize_points(
             store, cs='xyz')
 
-        if vr is None:
+        if vr is None or vr.shape != tuple((nx, ny)):
             vr = self._discretize_rupture_v(store, interpolation, points)\
                 .reshape(nx, ny)
-        elif vr.shape != tuple((nx, ny)):
-            vr = self._discretize_rupture_v(store, interpolation, points)\
-                .reshape(nx, ny)
+
+        if vr.shape != tuple((nx, ny)):
             logger.warn(
                 'Given rupture velocities are not in right shape. Therefore'
                 ' standard rupture velocity array is used.')
@@ -2774,7 +2792,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             raise TypeError(
                 'Interpolation method %s not available' % interpolation)
 
-        if not self._interpolators.get(interpolation, None):
+        if not self._interpolators.get(interpolation, False):
             _, points_xy, vr, times = self.discretize_time(
                 store=store, *args, **kwargs)
 
@@ -2792,7 +2810,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 RegularGridInterpolator(
                     (points_xy[::ny, 0], points_xy[:ny, 1]), vr,
                     method=interp_map[interpolation]))
-
         return self._interpolators[interpolation]
 
     def discretize_patches(
@@ -3124,7 +3141,6 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 ul = (p.length_pos + p.al1, p.width_pos + p.aw1)
                 lr = (p.length_pos + p.al2, p.width_pos + p.aw2)
 
-
                 idx_length, *_ = num.where(
                     (points_x >= ul[0]) & (points_x < lr[0]))
                 idx_width, *_ = num.where(
@@ -3151,6 +3167,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
 
         if self.smooth_rupture:
             disloc_est *= patch_activation[:, num.newaxis]
+
+        if scale_slip and self.slip:
+            disloc_est *= self.slip / disloc_est.max()
 
         return disloc_est
 

@@ -116,9 +116,10 @@ class DirectedTractions(TractionField):
 
     def get_tractions(self, nx, ny, patches=None):
         npatches = nx * ny
-        normal = 0.
+
         strike = num.cos(self.rake*d2r) * self.traction
         dip = num.sin(self.rake*d2r) * self.traction
+        normal = 0.
 
         return num.tile((strike, dip, normal), npatches).reshape(-1, 3)
 
