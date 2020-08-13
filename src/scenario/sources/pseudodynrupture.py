@@ -32,8 +32,10 @@ class PseudoDynamicRuptureGenerator(SourceGenerator):
     depth = Float.T(
         optional=True)
     nx = Int.T(
+        default=5,
         optional=True)
     ny = Int.T(
+        default=5,
         optional=True)
     nucleation_x = Float.T(
         optional=True)
@@ -93,7 +95,8 @@ class PseudoDynamicRuptureGenerator(SourceGenerator):
             nucleation_y=float(nucleation_y),
             nx=self.nx,
             ny=self.ny,
-            decimation_factor=self.decimation_factor)
+            decimation_factor=self.decimation_factor,
+            smooth_rupture=True)
 
         return source
 

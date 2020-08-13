@@ -28,7 +28,7 @@ class GPSNoiseGenerator(NoiseGenerator):
     def add_noise(self, campaign):
         # https://www.nat-hazards-earth-syst-sci.net/15/875/2015/nhess-15-875-2015.pdf
         waterlevel = 1. - (.99 + .0015 * self.measurement_duarion_days)  # noqa
-        logger.warning('GNSSNoiseGenerator is a work-in-progress!')
+        logger.warning('GPSNoiseGenerator is a work-in-progress!')
 
         for ista, sta in enumerate(campaign.stations):
             pass
@@ -62,8 +62,8 @@ class GNSSCampaignGenerator(TargetGenerator):
 
     def get_targets(self):
         stations = self.get_stations()
-        lats = num.array([s.lat for s in stations])
-        lons = num.array([s.lon for s in stations])
+        lats = num.array([s.effective_lat for s in stations])
+        lons = num.array([s.effective_lon for s in stations])
 
         target = gf.GNSSCampaignTarget(
             lats=lats,
