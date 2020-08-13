@@ -1140,7 +1140,7 @@ class Source(Location, Cloneable):
           >>> from pyrocko import gf
           >>> s = gf.DCSource()
           >>> s.update(strike=66., dip=33.)
-          >>> print s
+          >>> print(s)
           --- !pf.DCSource
           depth: 0.0
           time: 1970-01-01 00:00:00
@@ -3134,18 +3134,18 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 self.get_vr_time_interpolators(store)
 
             # Getting the native Eikonal grid, bit hackish
-            points_x = time_interpolator.grid[0]
-            points_y = time_interpolator.grid[1]
+            points_x = num.round(time_interpolator.grid[0], decimals=2)
+            points_y = num.round(time_interpolator.grid[1], decimals=2)
             times_eikonal = time_interpolator.values
 
             for ip, p in enumerate(self.patches):
                 ul = (p.length_pos + p.al1, p.width_pos + p.aw1)
                 lr = (p.length_pos + p.al2, p.width_pos + p.aw2)
 
-                idx_length, *_ = num.where(
-                    (points_x >= ul[0]) & (points_x < lr[0]))
-                idx_width, *_ = num.where(
-                    (points_y >= ul[1]) & (points_y < lr[1]))
+                idx_length, *_ = num.where((
+                    points_x >= ul[0]) & (points_x <= lr[0]))
+                idx_width, *_ = num.where((
+                    points_y >= ul[1]) & (points_y <= lr[1]))
 
                 times_patch = times_eikonal[num.ix_(idx_length, idx_width)]
                 patch_activation[ip] = \
