@@ -2640,11 +2640,12 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         npoints = int(self.width // km) + 1
         points = num.zeros((npoints, 3))
         points[:, 1] = num.linspace(-1., 1., npoints)
-        points[:, 1] = (points[:, 1] - anch_y) * self.width/2 + self.depth
+        points[:, 1] = (points[:, 1] - anch_y) * self.width/2
 
         rotmat = num.asarray(
             pmt.euler_to_matrix(self.dip*d2r, self.strike*d2r, 0.0))
         points = num.dot(rotmat.T, points.T).T
+        points[:, 2] += self.depth
 
         vs_min = store.config.get_vs(
             self.lat, self.lon, points,
