@@ -9,7 +9,7 @@ import os.path as op
 import numpy as num
 
 from pyrocko import gf, util
-from pyrocko.guts import Float
+from pyrocko.guts import Float, List
 
 from .base import TargetGenerator, NoiseGenerator
 from ..station import RandomStationGenerator, StationGenerator
@@ -42,11 +42,12 @@ class GPSNoiseGenerator(NoiseGenerator):
 
 
 class GNSSCampaignGenerator(TargetGenerator):
-    station_generator = StationGenerator.T(
-        default=RandomStationGenerator(
+    station_generators = List.T(
+        StationGenerator.T(),
+        default=[RandomStationGenerator.D(
             network_name='GN',
-            channels=None),
-        help='The StationGenerator for creating the stations.')
+            channels=None)],
+        help='The StationGenerator.')
 
     noise_generator = NoiseGenerator.T(
         default=GPSNoiseGenerator.D(),
@@ -58,7 +59,10 @@ class GNSSCampaignGenerator(TargetGenerator):
         help='The GF store to use for forward-calculations.')
 
     def get_stations(self):
-        return self.station_generator.get_stations()
+        stations = []
+        for station_generator in self.station_generators:
+            stations.extend(station_generator.get_stations())
+        return stations
 
     def get_targets(self):
         stations = self.get_stations()
@@ -105,8 +109,10 @@ class GNSSCampaignGenerator(TargetGenerator):
         path_gnss = op.join(path, 'gnss')
         util.ensuredir(path_gnss)
 
-        fn = op.join(path_gnss,
-                     'campaign-%s.yml' % self.station_generator.network_name)
+        fn = op.join(
+            path_gnss,
+            'campaign-%s.yml' % '_'.join([
+                sg.network_name for sg in self.station_generators]))
 
         if op.exists(fn):
             return

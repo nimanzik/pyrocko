@@ -17,6 +17,7 @@ from .base import LocationGenerator
 
 guts_prefix = 'pf.scenario'
 km = 1e3
+d2r = num.pi / 180.
 
 
 class StationGenerator(LocationGenerator):
@@ -67,7 +68,7 @@ class ImportStationGenerator(StationGenerator):
         optional=True,
         help='List of files with station coordinates in StationXML format.')
 
-    pyrocko_stations = List.T(
+    stations = List.T(
         model.Station.T(),
         optional=True,
         help='List of Pyrocko stations.')
@@ -106,10 +107,10 @@ class ImportStationGenerator(StationGenerator):
                 for filename in self.stations_stationxml_paths:
                     sxml = stationxml.load_xml(filename=filename)
                     stations.extend(
-                        sxml.get_pyrocko_stations())
+                        sxml.cko_stations())
 
-            if self.pyrocko_stations:
-                stations.extend(self.pyrocko_stations)
+            if self.stations:
+                stations.extend(self.stations)
 
             self._stations = stations
 
@@ -126,21 +127,31 @@ class CircleStationGenerator(StationGenerator):
         default=100*km,
         help='Radius of the station circle in km.')
 
+    azi_start = Float.T(
+        default=0.,
+        help='Start azimuth of circle [deg]. '
+             'Default is a full circle, 0 - 360 deg')
+
+    azi_end = Float.T(
+        default=360.,
+        help='End azimuth of circle [deg]. '
+             'Default is a full circle, 0 - 360 deg')
+
     nstations = Int.T(
         default=10,
         help='Number of evenly spaced stations.')
 
     network_name = String.T(
         default='CI',
-        help='Network name')
+        help='Network name.')
 
     channels = List.T(
         default=['BHE', 'BHN', 'BHZ'],
-        help='Seismic channels to generate. Default: BHN, BHE, BHZ')
+        help='Seismic channels to generate. Default: BHN, BHE, BHZ.')
 
-    rotate_circle = Bool.T(
+    shift_circle = Bool.T(
         default=False,
-        help='Rotate circle away from 0 deg azimuth - phase shift of 180 deg.')
+        help='Rotate circle away by half a station distance.')
 
     def get_stations(self):
         if self._stations is None:
@@ -150,9 +161,12 @@ class CircleStationGenerator(StationGenerator):
                 channels = None
 
             azimuths = num.linspace(
-                0., 2*num.pi, self.nstations, endpoint=False)
-            if self.rotate_circle:
-                azimuths += 2*num.pi / self.nstations / 2
+                self.azi_start*d2r, self.azi_end*d2r,
+                self.nstations, endpoint=False)
+
+            if self.shift_circle:
+                swath = (self.azi_end - self.azi_start)*d2r
+                azimuths += swath / self.nstations / 2.
 
             lat, lon = self.get_center_latlon()
 
