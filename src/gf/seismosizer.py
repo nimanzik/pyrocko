@@ -2509,8 +2509,8 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             raise AttributeError(
                 'tractions and rake are mutually exclusive')
         if self.tractions is None and self.rake is None:
-            raise AttributeError(
-                'No tractions or rake are defined')
+            self.rake = 0.
+
         if self.magnitude is not None and self.slip is not None:
             raise DerivedMagnitudeError(
                 'definition of slip and magnitude is mutually exclusive')
