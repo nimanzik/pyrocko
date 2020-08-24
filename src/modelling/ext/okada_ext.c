@@ -853,10 +853,39 @@ static okada_error_t dc3d_flexi(
         int rot_sdn) {
 
     /*
-     * Wrapper for dc3d function
-     * Is applied on single source-receiver pair
-     * source is arbitrary oriented
-    */
+     *   Wrapper for dc3d function
+     *   It is applied on single source-receiver pair for an arbitrary oriented source
+     *   Displacement and strain at depth due to buried finite fault in a
+     *    semiinfinite medium.
+     *
+     *         coded by  y.okada ... sep.1991
+     *         revised ... nov.1991, apr.1992, may.1993, jul.1993, may.2002
+     *         translated to c by s.heimann and m.metz ... feb.2019
+     *
+     *    Input:
+     *
+     *      alpha:       medium constant  (lambda + myu)/(lambda + 2*myu)
+     *      nr, er, zr:  coordinate of observing point north, east, down [m]
+     *      ns, es, zs:  coordinate of source plane reference point north, east, down [m]
+     *      strike:      strike-angle (degree)
+     *      dip:         dip-angle (degree)
+     *      al1, al2:    fault length range
+     *      aw1, aw2:    fault width range
+     *      disl1-disl3: strike-, dip-, tensile-dislocations
+     *      rot_sdn:     1, if displacements and derivatives are returned in strike-dip-
+     *                   tensile, 0 for north-east-down
+     *    Output:
+     *
+     *      u[12]: displacement (units of disl) and derivatives
+     *             ((unit of disl) / (unit of nr, er, zr, ns, es, zs, al, aw)) as
+     *
+     *           [us, ud, ut, uss, uds, uts, usd, udd, utd, ust, udt, utt] with rot_sdn = 1
+     *           [un, ue, ud, unn, uen, udn, une, uee, ude, und, ued, udd] with rot_sdn = 0
+     *
+     *    Return value:
+     *
+     *      0 for success or error code
+     */
 
     double rotmat[3][3];
     double r[3], rrot[3];
