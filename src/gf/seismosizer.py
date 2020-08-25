@@ -3257,7 +3257,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             *args, scale_slip=False, **kwargs)
         dt = calc_times[1] - calc_times[0]
 
-        slip_change = num.linalg.norm(ddisloc_est, axis=1) / dt
+        slip_change = num.linalg.norm(ddisloc_est, axis=2) / dt
         shear_mod = num.mean(self.get_patch_attribute('shearmod'))
         dA = num.array([p.length * p.width for p in self.patches])
 

@@ -873,14 +873,16 @@ static okada_error_t dc3d_flexi(
      *      aw1, aw2:    fault width range
      *      disl1-disl3: strike-, dip-, tensile-dislocations
      *      rot_sdn:     1, if displacements and derivatives are returned in strike-dip-
-     *                   tensile, 0 for north-east-down
+     *                   tensile (normal), 0 for north-east-down
      *    Output:
      *
      *      u[12]: displacement (units of disl) and derivatives
      *             ((unit of disl) / (unit of nr, er, zr, ns, es, zs, al, aw)) as
      *
-     *           [us, ud, ut, uss, uds, uts, usd, udd, utd, ust, udt, utt] with rot_sdn = 1
-     *           [un, ue, ud, unn, uen, udn, une, uee, ude, und, ued, udd] with rot_sdn = 0
+     *           [us, ud, un, uss, uds, uns, usd, udd, und, usn, udn, unn]
+     *              with rot_sdn = 1 and s-strike, d-down dip and n-normal
+     *           [un, ue, ud, unn, uen, udn, une, uee, ude, und, ued, udd]
+     *              with rot_sdn = 0 and n-north, e-east and d-down
      *
      *    Return value:
      *
