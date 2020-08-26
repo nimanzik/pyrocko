@@ -3112,8 +3112,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
         npatches = len(self.patches)
         tractions = self.get_tractions()
 
+        time_patch = time
         if time is None:
-            time = self.get_patch_attribute('time').max()
+            time_patch = self.get_patch_attribute('time').max()
 
         if self.coef_mat is None:
             self.calc_coef_mat()
@@ -3124,7 +3125,7 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
                 ' Required shape is (npatches, 3)')
 
         times = self.get_patch_attribute('time') - self.time
-        relevant_sources = num.nonzero(times <= time)[0]
+        relevant_sources = num.nonzero(times <= time_patch)[0]
         disloc_est = num.zeros_like(tractions)
 
         if self.smooth_rupture:
@@ -3137,6 +3138,9 @@ class PseudoDynamicRupture(SourceWithDerivedMagnitude):
             points_x = num.round(time_interpolator.grid[0], decimals=2)
             points_y = num.round(time_interpolator.grid[1], decimals=2)
             times_eikonal = time_interpolator.values
+
+            if time is None:
+                time = times_eikonal.max()
 
             for ip, p in enumerate(self.patches):
                 ul = (p.length_pos + p.al1, p.width_pos + p.aw1)

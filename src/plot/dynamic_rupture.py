@@ -19,7 +19,7 @@ from matplotlib import cm, pyplot as plt
 from pyrocko import gmtpy, moment_tensor as pmt, orthodrome as pod, util
 from pyrocko.plot import (mpl_init, mpl_margins, mpl_papersize, mpl_color,
                           AutoScaler)
-from pyrocko.plot.automap import Map
+from pyrocko.plot.automap import Map, NoTopo
 from pyrocko.gf import PseudoDynamicRupture
 from pyrocko.gf.seismosizer import map_anchor
 
@@ -55,7 +55,7 @@ def _save_grid(lats, lons, data, filename):
     gmtpy.savegrd(lons, lats, data, filename=filename, naming='lonlat')
 
 
-def _mplcmap_to_gmtcpt_code(mplcmap):
+def _mplcmap_to_gmtcpt_code(mplcmap, steps=256):
     '''
     Get gmt readable R/G/A code from a given matplotlib colormap
 
@@ -68,7 +68,7 @@ def _mplcmap_to_gmtcpt_code(mplcmap):
 
     cmap = cm.get_cmap(mplcmap)
 
-    rgbas = [cmap(i) for i in num.linspace(0, 255, 256).astype(num.int64)]
+    rgbas = [cmap(i) for i in num.linspace(0, 255, steps).astype(num.int64)]
 
     return ','.join(['%g/%g/%g' % (
         c[0] * 255, c[1] * 255, c[2] * 255) for c in rgbas])
@@ -125,7 +125,7 @@ def make_colormap(
 
     return gmt.makecpt(
         C=C,
-        D='i',
+        D='o',
         T='%g/%g/%g' % (
             vmin - margin, vmax + margin, incr),
         Z=True,
@@ -240,18 +240,18 @@ cbar_helper = {
         'factor': 1.},
     'strike': {
         'unit': '°',
-        'factor': 1e-6},
+        'factor': 1.},
     'dip': {
         'unit': '°',
-        'factor': 1e-6},
+        'factor': 1.},
     'vr': {
         'unit': 'km/s',
         'factor': 1e-3},
     'length': {
-        'unit': 'm',
+        'unit': 'km',
         'factor': 1e-3},
     'width': {
-        'unit': 'm',
+        'unit': 'km',
         'factor': 1e-3}
 }
 
@@ -314,13 +314,16 @@ class RuptureMap(Map):
             fontcolor='darkslategrey',
             width=20.,
             height=14.,
+            margins=None,
             *args, **kwargs):
 
         size = (width, height)
         fontsize, gmt_config = _make_gmt_conf(fontcolor, size)
-        margins = [
-            fontsize * 0.15, num.min(size) / 200.,
-            num.min(size) / 200., fontsize * 0.05]
+
+        if margins is None:
+            margins = [
+                fontsize * 0.15, num.min(size) / 200.,
+                num.min(size) / 200., fontsize * 0.05]
 
         Map.__init__(self, margins=margins, width=width, height=height,
                      gmt_config=gmt_config,
@@ -329,6 +332,7 @@ class RuptureMap(Map):
         self.source = source
         self._fontcolor = fontcolor
         self._fontsize = fontsize
+        self.axes_layout = 'WeSn'
 
     @property
     def size(self):
@@ -376,7 +380,11 @@ class RuptureMap(Map):
         if self._dems is None:
             self._setup()
 
-        t, _ = self._get_topo_tile('land')
+        try:
+            t, _ = self._get_topo_tile('land')
+        except NoTopo:
+            t, _ = self._get_topo_tile('ocean')
+
         return t
 
     def _patches_to_lw(self):
@@ -719,6 +727,34 @@ class RuptureMap(Map):
             *self.jxyr,
             **kwargs)
 
+    def draw_vector(self, x_gridfile, y_gridfile, vcolor='', **kwargs):
+        ''' Draw vectors based on two grid files
+
+        Two grid files for vector lengths in x and y need to be given. The
+        function calls gmt.grdvector. All arguments defined for this function
+        in gmt can be passed as keyword arguments. Different standard settings
+        are applied if not defined differently.
+
+        :param x_gridfile: File of the grid defining vector lengths in x
+        :type x_gridfile: string
+        :param y_gridfile: File of the grid defining vector lengths in y
+        :type y_gridfile: string
+        :param vcolor: Vector face color as defined in "G" option
+        :type vcolor: string
+        '''
+
+        kwargs['S'] = kwargs.get('S', 'il1.')
+        kwargs['I'] = kwargs.get('I', 'x20')
+        kwargs['vcolor'] = kwargs.get('vcolor', 'lightgray')
+        kwargs['W'] = kwargs.get('W', '0.3p,%s' % 'black')
+        kwargs['Q'] = kwargs.get('Q', '4c+e+n5c+h1')
+
+        self.gmt.grdvector(
+            x_gridfile, y_gridfile,
+            G='%s' % 'darkslategrey' if not vcolor else vcolor,
+            *self.jxyr,
+            **kwargs)
+
     def draw_dynamic_data(self, data, **kwargs):
         '''
         Draw an image of any data gridded on the patches e.g dislocation
@@ -936,6 +972,36 @@ class RuptureMap(Map):
         self.draw_contour(tmp_grd_file, **kwargs)
 
         clear_temp(gridfiles=[tmp_grd_file], cpts=[])
+
+    def draw_dislocation_vector(self, time=None, **kwargs):
+        '''Draw vector arrows onto map indicating direction of dislocation
+
+        For a given time (if time is None, tmax is used) and given component
+        the dislocation is plotted as vectors onto the map.
+        :param time: time after origin, for which dislocation is computed. If
+            None, tmax is taken.
+        :type time: optional, float
+        '''
+
+        disl = self.source.get_okada_slip(time=time)
+
+        p_strike = self.source.get_patch_attribute('strike') * d2r
+        p_dip = self.source.get_patch_attribute('dip') * d2r
+
+        disl_dh = num.cos(p_dip) * disl[:, 1]
+        disl_n = num.cos(p_strike) * disl[:, 0] + num.sin(p_strike) * disl_dh
+        disl_e = num.sin(p_strike) * disl[:, 0] - num.cos(p_strike) * disl_dh
+
+        tmp_grd_files = ['tmpdata_%s.grd' % c for c in ('n', 'e')]
+
+        self.patch_data_to_grid(disl_n, tmp_grd_files[0])
+        self.patch_data_to_grid(disl_e, tmp_grd_files[1])
+
+        self.draw_vector(
+            tmp_grd_files[1], tmp_grd_files[0],
+            **kwargs)
+
+        clear_temp(gridfiles=tmp_grd_files, cpts=[])
 
 
 class RuptureView(object):
@@ -1311,7 +1377,7 @@ class RuptureView(object):
 
         v = variable
 
-        data, times = self.source.get_source_moment_rate(store=store, dt=dt)
+        data, times = self.source.get_moment_rate(store=store, deltat=dt)
 
         if v in ('moment_rate', 'stf'):
             name, unit = 'dM/dt', 'Nm/s'
@@ -1357,15 +1423,15 @@ class RuptureView(object):
         m = re.match(r'dislocation_([xyz])', v)
 
         if v in ('moment_rate', 'cumulative_moment', 'moment'):
-            data, times = source.get_moment_rate(dt=dt)
+            data, times = source.get_moment_rate_patches(dt=dt)
         elif 'dislocation' in v or 'slip_rate' == v:
             ddisloc, times = source.get_delta_slip(dt=dt)
 
         if v == 'moment_rate':
-            data, times = source.get_moment_rate(store=store, dt=dt)
+            data, times = source.get_moment_rate_patches(store=store, dt=dt)
             name, unit = 'dM/dt', 'Nm/s'
         elif v == 'cumulative_moment' or v == 'moment':
-            data, times = source.get_moment_rate(store=store, dt=dt)
+            data, times = source.get_moment_rate_patches(store=store, dt=dt)
             data = num.cumsum(data, axis=1)
             name, unit = 'M', 'Nm'
         elif v == 'slip_rate':
@@ -1486,7 +1552,7 @@ def rupture_movie(
     :type fn_path: optional, string
     :param prefix: File prefix used for the movie (and optional image) files
     :type prefix: optional, string
-    :param plot_type: Choice of plot type (map plot using
+    :param plot_type: Choice of plot type: 'map', 'view' (map plot using
         :py:class:`pyrocko.plot.dynamic_rupture.RuptureMap or plane view using
         :py:class:`pyrocko.plot.dynamic_rupture.RuptureView)
     :type plot_type: optional, string
@@ -1508,7 +1574,7 @@ def rupture_movie(
         dt = store.config.deltat
 
     if v == 'moment_rate':
-        data, times = source.get_moment_rate(dt=dt)
+        data, times = source.get_moment_rate_patches(dt=dt)
         name, unit = 'dM/dt', 'Nm/s'
     elif 'dislocation' in v or 'slip_rate' == v:
         ddisloc, times = source.get_delta_slip(dt=dt)
