@@ -745,13 +745,12 @@ class RuptureMap(Map):
 
         kwargs['S'] = kwargs.get('S', 'il1.')
         kwargs['I'] = kwargs.get('I', 'x20')
-        kwargs['vcolor'] = kwargs.get('vcolor', 'lightgray')
         kwargs['W'] = kwargs.get('W', '0.3p,%s' % 'black')
         kwargs['Q'] = kwargs.get('Q', '4c+e+n5c+h1')
 
         self.gmt.grdvector(
             x_gridfile, y_gridfile,
-            G='%s' % 'darkslategrey' if not vcolor else vcolor,
+            G='%s' % 'lightgrey' if not vcolor else vcolor,
             *self.jxyr,
             **kwargs)
 
@@ -797,17 +796,13 @@ class RuptureMap(Map):
         source = self.source
 
         if a == 'traction':
-            data = num.linalg.norm(source.tractions.get_tractions(
-                nx=source.nx, ny=source.ny), axis=1)
+            data = num.linalg.norm(source.get_tractions(), axis=1)
         elif a == 'tx':
-            data = source.tractions.get_tractions(
-                nx=source.nx, ny=source.ny)[:, 0]
+            data = source.get_tractions()[:, 0]
         elif a == 'ty':
-            data = source.tractions.get_tractions(
-                nx=source.nx, ny=source.ny)[:, 1]
+            data = source.get_tractions()[:, 1]
         elif a == 'tz':
-            data = source.tractions.get_tractions(
-                nx=source.nx, ny=source.ny)[:, 2]
+            data = source.get_tractions()[:, 2]
         else:
             data = source.get_patch_attribute(attribute)
 
@@ -1221,17 +1216,13 @@ class RuptureView(object):
         source = self.source
 
         if a == 'traction':
-            data = num.linalg.norm(source.tractions.get_tractions(
-                nx=source.nx, ny=source.ny), axis=1)
+            data = num.linalg.norm(source.get_tractions(), axis=1)
         elif a == 'tx':
-            data = source.tractions.get_tractions(
-                nx=source.nx, ny=source.ny)[:, 0]
+            data = source.get_tractions()[:, 0]
         elif a == 'ty':
-            data = source.tractions.get_tractions(
-                nx=source.nx, ny=source.ny)[:, 1]
+            data = source.get_tractions()[:, 1]
         elif a == 'tz':
-            data = source.tractions.get_tractions(
-                nx=source.nx, ny=source.ny)[:, 2]
+            data = source.get_tractions()[:, 2]
         else:
             data = source.get_patch_attribute(attribute)
 
