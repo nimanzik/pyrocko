@@ -315,6 +315,8 @@ class RuptureMap(Map):
             width=20.,
             height=14.,
             margins=None,
+            topo_cpt_wet='light_sea_uniform',
+            topo_cpt_dry='light_land_uniform',
             *args, **kwargs):
 
         size = (width, height)
@@ -327,6 +329,7 @@ class RuptureMap(Map):
 
         Map.__init__(self, margins=margins, width=width, height=height,
                      gmt_config=gmt_config,
+                     topo_cpt_dry=topo_cpt_dry, topo_cpt_wet=topo_cpt_wet,
                      *args, **kwargs)
 
         self.source = source
@@ -1511,6 +1514,38 @@ def render_movie(fn_path, output_path, dt=0.5):
         output_path])
 
 
+def render_gif(fn, output_path, loops=-1):
+    ''' Generate a gif based on a given mp4 using ffmpeg
+
+    Render a gif based on a given .mp4 movie file in fn_path.
+
+    :param fn: Path and file name of the input .mp4 file.
+    :type fn: string
+    :param output_path: Path and filename of the output gif movie file
+    :type output_path: string
+    :param loops: Number of gif repeats (loops). -1 is not repetition,
+        0 infinite
+    :type loops: optional, integer
+    '''
+
+    try:
+        check_call(['ffmpeg', '-loglevel', 'panic'])
+    except CalledProcessError:
+        pass
+    except (TypeError):
+        logger.warn(
+            'Package ffmpeg needed for movie rendering. Please install it '
+            '(e.g. on linux distr. via sudo apt-get ffmpeg.) and retry.')
+        return
+
+    check_call([
+        'ffmpeg', '-i',
+        fn,
+        '-filter_complex', 'palettegen[v1];[0:v][v1]paletteuse',
+        '-loop', '%d' % loops,
+        output_path])
+
+
 def rupture_movie(
         source,
         store,
@@ -1520,10 +1555,13 @@ def rupture_movie(
         plot_type='map',
         dt=None,
         store_images=False,
+        render_as_gif=False,
+        gif_loops=-1,
+        original_patch_indices=None,
         **kwargs):
     ''' Generate a movie based on a given source for dynamic parameter
 
-    Create a .mp4 movie of one of the following dynamic parameters
+    Create a .mp4 movie or gif of one of the following dynamic parameters
     (dislocation, dislocation_x (along strike), dislocation_y (along updip),
     dislocation_z (normal), slip_rate, moment_rate). If whished, the single
     snap shots can be stored as images as well. kwargs have to be given
@@ -1553,10 +1591,30 @@ def rupture_movie(
     :param store_images: Choice to store the single .png parameter snapshots in
         fn_path or not.
     :type store_images: optional, bool
+    :param render_as_gif: If True, the movie is converted into a gif. If False,
+        the movie is returned as mp4
+    :type render_as_gif: optional, bool
+    :param gif_loops: If render_as_gif is True, a gif with gif_loops number of
+        loops (repetitions) is returned. -1 is no repetition, 0 infinite.
+    :type gif_loops: optional, integer
+    :param original_patch_indices: If the source has been recalculated and
+        manually manipulated (patches, coef_mat etc.), then give here a boolean
+        array indicating the position of the remaining patches on the original
+        patch grid. False is interpreted as no data, True is replaced by the
+        patch data.
+    :type original_patch_indices: optional,
+        :py:class:`numpy.ndarray` of bool ``(source.nx, source.ny)``
     '''
 
     v = variable
-    source.discretize_basesource(store)
+
+    if not source.patches:
+        source.discretize_patches(store, interpolation='multilinear')
+
+    if source.coef_mat is None:
+        source.calc_coef_mat()
+
+    # source.discretize_basesource(store)
 
     if not prefix:
         prefix = v
@@ -1576,10 +1634,10 @@ def rupture_movie(
 
     m = re.match(r'dislocation_([xyz])', v)
     if m:
-        data = num.cumsum(ddisloc, axis=2)[:, c2disl[m.group(1)], :]
+        data = num.cumsum(ddisloc, axis=1)[:, :, c2disl[m.group(1)]]
         name, unit = 'du%s' % m.group(1), 'm'
     elif v == 'dislocation':
-        data = num.linalg.norm(num.cumsum(ddisloc, axis=2), axis=1)
+        data = num.linalg.norm(num.cumsum(ddisloc, axis=1), axis=2)
         name, unit = 'du', 'm'
     elif v == 'slip_rate':
         data = num.linalg.norm(ddisloc, axis=1) / dt
@@ -1615,16 +1673,29 @@ def rupture_movie(
         fn_temp_path = op.join(temp_path, 'f%09d.png')
 
         for it, (t, ft) in enumerate(zip(times, fns_temp)):
+            plot_data = data[:, it]
+
+            if original_patch_indices is not None:
+                plot_data = num.zeros(original_patch_indices.shape)
+                plot_data[original_patch_indices] = data[:, it]
+
             plt = plt_base(source=source, **kwargs_base)
-            plt.draw_dynamic_data(data[:, it],
+            plt.draw_dynamic_data(plot_data,
                                   **kwargs_plt)
             plt.draw_time_contour(store, clevel=[t])
 
             plt.save(ft)
 
-        render_movie(fn_temp_path,
-                     output_path=op.join(
-                         fn_path, '%s_%s_movie.mp4' % (prefix, plot_type)))
+        fn_mp4 = op.join(temp_path, 'movie.mp4')
+        render_movie(fn_temp_path, output_path=fn_mp4)
+
+        if render_as_gif:
+            render_gif(fn=fn_mp4, output_path=op.join(
+                fn_path, '%s_%s_gif.gif' % (prefix, plot_type)),
+                loops=gif_loops)
+        else:
+            shutil.move(fn_mp4, op.join(
+                fn_path, '%s_%s_movie.mp4' % (prefix, plot_type)))
 
         if store_images:
             fns = [op.join(fn_path, '%s_%s_%g.png' % (prefix, plot_type, t))
