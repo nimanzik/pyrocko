@@ -114,14 +114,10 @@ References
 
 .. [Wang1999] Wang, R. (1999): A simple orthonormalization method for the stable and efficient computation of Green's functions. - Bulletin of the Seismological Society of America, 89, 733-741.
 
-.. [Wang2003] Wang, R., Lorenzo Martín, F., Roth, F. (2003): Computation of deformation induced by earthquakes in a multi-layered elastic crust; FORTRAN programs EDGRN/ EDCMP. - Computers and Geosciences, 29, 2, 195-207.
-https://doi.org/10.1016/S0098-3004(02)00111-5
+.. [Wang2003] Wang, R., Lorenzo Martín, F., Roth, F. (2003): Computation of deformation induced by earthquakes in a multi-layered elastic crust; FORTRAN programs EDGRN/ EDCMP. - Computers and Geosciences, 29, 2, 195-207. https://doi.org/10.1016/S0098-3004(02)00111-5
 
-.. [Wang2005] Wang, R. (2005): The dislocation theory: a consistent way for including the gravity effect in (visco)elastic plane-earth models. - Geophysical Journal International, 161, 1, 191-196.
-https://doi.org/10.1111/j.1365-246X.2005.02614.x
+.. [Wang2005] Wang, R. (2005): The dislocation theory: a consistent way for including the gravity effect in (visco)elastic plane-earth models. - Geophysical Journal International, 161, 1, 191-196. https://doi.org/10.1111/j.1365-246X.2005.02614.x
 
-.. [Wang2006] Wang, R., Lorenzo Martín, F., Roth, F. (2006): PSGRN/PSCMP - a new code for calculating co- and post-seismic deformation, geoid and gravity changes based on the viscoelastic-gravitational dislocation theory. - Computers and Geosciences, 32, 4, 527-541.
-https://doi.org/10.1016/j.cageo.2005.08.006
+.. [Wang2006] Wang, R., Lorenzo Martín, F., Roth, F. (2006): PSGRN/PSCMP - a new code for calculating co- and post-seismic deformation, geoid and gravity changes based on the viscoelastic-gravitational dislocation theory. - Computers and Geosciences, 32, 4, 527-541. https://doi.org/10.1016/j.cageo.2005.08.006
 
-.. [Wang2017] Wang, R., Heimann, S., Zhang, Y., Wang, H., Dahm, T. (2017): Complete synthetic seismograms based on a spherical self-gravitating Earth model with an atmosphere–ocean–mantle–core structure. - Geophysical Journal International, 210, 3, 1739-1764.
-https://doi.org/10.1093/gji/ggx259
+.. [Wang2017] Wang, R., Heimann, S., Zhang, Y., Wang, H., Dahm, T. (2017): Complete synthetic seismograms based on a spherical self-gravitating Earth model with an atmosphere–ocean–mantle–core structure. - Geophysical Journal International, 210, 3, 1739-1764. https://doi.org/10.1093/gji/ggx259
