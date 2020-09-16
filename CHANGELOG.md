@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - Support for rotational seismograms in GF stores and fomosto QSSP2017 backend.
 
+### Fixed
+- fixed incorrect acceleration and velocity values caused by missing
+  consideration of dt after derivation 
+
 ## [2020.08.18]
 
 ### Added
@@ -16,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Scenario-generator (Colosseo) now supports user-specified lists of stations.
 
 ### Changed
-- FDSN client now checks arguments against service description (WADL) by 
+- FDSN client now checks arguments against service description (WADL) by
   default.
 - Improved FDSN client and documentation.
 

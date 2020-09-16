@@ -2864,7 +2864,9 @@ class VectorRule(Rule):
             data = data + base_seismogram[d].data * sd
 
         if self.differentiate:
-            data = num.diff(data)
+            data = num.diff(data, prepend=data[0])*base_seismogram[d].deltat
+        if self.differentiate == 2:
+            data = num.diff(data, prepend=data[0])*base_seismogram[d].deltat
 
         return data
 
