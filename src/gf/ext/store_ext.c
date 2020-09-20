@@ -7,9 +7,12 @@
 
 #define SQR(a)  ( (a) * (a) )
 
-#define EARTHRADIUS 6371000.0
+/*#define EARTHRADIUS 6371000.0*/
+#define EARTHRADIUS 3389500.0
 #define EARTH_OBLATENESS 1./298.257223563
-#define EARTHRADIUS_EQ 6378140.0
+/*#define EARTHRADIUS_EQ 6378140.0*/
+#define EARTHRADIUS_EQ 3389500.0
+
 #define NPY_GFDTYPE NPY_FLOAT32
 
 #define inlimits(i) (-SLIMIT <= (i) && (i) <= SLIMIT)

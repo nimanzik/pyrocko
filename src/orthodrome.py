@@ -16,7 +16,8 @@ from matplotlib.path import Path
 d2r = math.pi/180.
 r2d = 1./d2r
 earth_oblateness = 1./298.257223563
-earthradius_equator = 6378.14 * 1000.
+#earthradius_equator = 6378.14 * 1000.
+earthradius_equator = 3389.5 * 1000.
 earthradius = config().earthradius
 d2m = earthradius_equator*math.pi/180.
 m2d = 1./d2m
