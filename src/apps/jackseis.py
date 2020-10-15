@@ -15,7 +15,8 @@ from optparse import OptionParser
 
 import numpy as num
 
-from .. import util, config, pile, model, io, trace
+from pyrocko import util, config, pile, model, io, trace
+from pyrocko.io import stationxml
 
 pjoin = os.path.join
 
@@ -43,6 +44,12 @@ name_to_dtype = {
     'float64': num.float64}
 
 
+output_units = {
+    'acceleration': 'M/S**2',
+    'velocity': 'M/S',
+    'displacement': 'M'}
+
+
 def str_to_seconds(s):
     if s.endswith('s'):
         return float(s[:-1])
@@ -66,6 +73,34 @@ def nice_seconds_floor(s):
         p = x
 
     return s
+
+
+def cut_and_dump(traces, twindow, output_path, options):
+    twmin, twmax = twindow
+
+    otraces = []
+    for tr in traces:
+        try:
+            otr = tr.chop(twmin, twmax, inplace=False)
+            otraces.append(otr)
+        except trace.NoData:
+            pass
+
+    try:
+        io.save(otraces, output_path, format=options.output_format,
+                overwrite=options.force,
+                additional=dict(
+                    wmin_year=tts(twmin, format='%Y'),
+                    wmin_month=tts(twmin, format='%m'),
+                    wmin_day=tts(twmin, format='%d'),
+                    wmin=tts(twmin, format='%Y-%m-%d_%H-%M-%S'),
+                    wmax_year=tts(twmax, format='%Y'),
+                    wmax_month=tts(twmax, format='%m'),
+                    wmax_day=tts(twmax, format='%d'),
+                    wmax=tts(twmax, format='%Y-%m-%d_%H-%M-%S')))
+
+    except io.FileSaveError as e:
+        die(str(e))
 
 
 def main(args=None):
@@ -98,6 +133,14 @@ def main(args=None):
         default=[],
         metavar='STATIONS',
         help='read station information from file STATIONS')
+
+    parser.add_option(
+        '--station-xml',
+        dest='station_xml_fns',
+        action='append',
+        default=[],
+        metavar='STATIONXML',
+        help='read station metadata from file STATIONXML')
 
     parser.add_option(
         '--event', '--events',
@@ -182,6 +225,21 @@ def main(args=None):
         choices=io.allowed_formats('save'),
         help='set output file format. Choices: %s' %
              io.allowed_formats('save', 'cli_help', 'mseed'))
+
+    quantity_choices = ('acceleration', 'velocity', 'displacement')
+    parser.add_option(
+        '--output-quantity',
+        dest='output_quantity',
+        choices=quantity_choices,
+        help='deconvolve instrument transfer function. Choices: %s'
+        % ', '.join(quantity_choices))
+
+    parser.add_option(
+        '--restitution-frequency-band',
+        default='0.001,100.0',
+        dest='str_fmin_fmax',
+        help='frequency band for instrument deconvolution as FMIN,FMAX in Hz. '
+        'Default: "%default"')
 
     parser.add_option(
         '--force',
@@ -315,6 +373,12 @@ def main(args=None):
     for stations_fn in options.station_fns:
         stations.extend(model.load_stations(stations_fn))
 
+    sxs = []
+    for station_xml_fn in options.station_xml_fns:
+        sxs.append(stationxml.load_xml(filename=station_xml_fn))
+
+    sx = stationxml.primitive_merge(sxs)
+
     events = []
     for event_fn in options.event_fns:
         events.extend(model.load_events(event_fn))
@@ -357,9 +421,16 @@ def main(args=None):
     if not output_path:
         die('--output not given')
 
-    tpad = 0.
+    fmin, fmax = map(float, options.str_fmin_fmax.split(','))
+    tfade_factor = 2.0
+    ffade_factor = 1.5
+    if options.output_quantity:
+        tpad = tfade_factor/fmin
+    else:
+        tpad = 0.
+
     if target_deltat is not None:
-        tpad = target_deltat * 10.
+        tpad += target_deltat * 10.
 
     if tinc is None:
         if ((tmax or p.tmax) - (tmin or p.tmin)) \
@@ -386,9 +457,12 @@ def main(args=None):
     old = signal.signal(signal.SIGINT, got_sigint)
 
     for traces in it:
+
         if traces:
-            twmin = min(tr.wmin for tr in traces)
-            twmax = max(tr.wmax for tr in traces)
+            twmin, twmax = (
+                min(tr.wmin for tr in traces),
+                max(tr.wmax for tr in traces))
+
             logger.info('processing %s - %s, %i traces' %
                         (tts(twmin), tts(twmax), len(traces)))
 
@@ -402,7 +476,6 @@ def main(args=None):
                         if options.output_data_type == 'same':
                             tr.ydata = tr.ydata.astype(tr.ydata.dtype)
 
-                        tr.chop(tr.wmin, tr.wmax)
                         out_traces.append(tr)
 
                     except (trace.TraceTooShort, trace.NoData):
@@ -426,21 +499,43 @@ def main(args=None):
 
                     tr.set_codes(**r)
 
-            if output_path:
-                try:
-                    io.save(traces, output_path, format=options.output_format,
-                            overwrite=options.force,
-                            additional=dict(
-                                wmin_year=tts(twmin, format='%Y'),
-                                wmin_month=tts(twmin, format='%m'),
-                                wmin_day=tts(twmin, format='%d'),
-                                wmin=tts(twmin, format='%Y-%m-%d_%H-%M-%S'),
-                                wmax_year=tts(twmax, format='%Y'),
-                                wmax_month=tts(twmax, format='%m'),
-                                wmax_day=tts(twmax, format='%d'),
-                                wmax=tts(twmax, format='%Y-%m-%d_%H-%M-%S')))
-                except io.FileSaveError as e:
-                    die(str(e))
+            if options.output_quantity:
+                out_traces = []
+                tfade = tfade_factor / fmin
+                ftap = (fmin / ffade_factor, fmin, fmax, ffade_factor * fmax)
+                for tr in traces:
+                    try:
+                        response = sx.get_pyrocko_response(
+                            tr.nslc_id,
+                            timespan=(tr.tmin, tr.tmax),
+                            fake_input_units=output_units[
+                                options.output_quantity])
+
+                        rest_tr = tr.transfer(
+                            tfade, ftap, response, invert=True)
+
+                        out_traces.append(rest_tr)
+
+                    except stationxml.NoResponseInformation as e:
+
+                        logger.warn(
+                            'Cannot restitute: %s (no response)' % str(e))
+
+                    except stationxml.MultipleResponseInformation as e:
+
+                        logger.warn(
+                            'Cannot restitute: %s (multiple responses found)'
+                            % str(e))
+
+                    except (trace.TraceTooShort, trace.NoData):
+
+                        logger.warn(
+                            'Trace too short: %s' % '.'.join(tr.nslc_id))
+
+                traces = out_traces
+
+            cut_and_dump(
+                traces, (twmin, twmax), output_path, options)
 
         if abort:
             break
