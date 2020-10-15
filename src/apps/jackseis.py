@@ -425,7 +425,7 @@ def main(args=None):
     tfade_factor = 2.0
     ffade_factor = 1.5
     if options.output_quantity:
-        tpad = tfade_factor/fmin
+        tpad = 2*tfade_factor/fmin
     else:
         tpad = 0.
 
@@ -512,7 +512,7 @@ def main(args=None):
                                 options.output_quantity])
 
                         rest_tr = tr.transfer(
-                            tfade, ftap, response, invert=True)
+                            tfade, ftap, response, invert=True, demean=True)
 
                         out_traces.append(rest_tr)
 
