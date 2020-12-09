@@ -500,8 +500,9 @@ class Selection(object):
 
         This generator yields tuples ``((format, path), nuts)`` where ``path``
         is the path to the file, ``format`` is the format assignation or
-        ``'detect'`` and ``nuts`` is a list of :py:class:`~pyrocko.squirrel.Nut`
-        objects representing the contents of the file.
+        ``'detect'`` and ``nuts`` is a list of
+        :py:class:`~pyrocko.squirrel.Nut` objects representing the contents of
+        the file.
         '''
 
         if skip_unchanged:
@@ -2172,7 +2173,6 @@ class Squirrel(Selection):
         for table_name in table_names:
             self._database.print_table(
                 m[table_name] % self._names, stream=stream)
-
 
 
 class DatabaseStats(Object):

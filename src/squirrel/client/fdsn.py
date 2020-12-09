@@ -551,6 +551,7 @@ class FDSNSource(Source):
         for agg in elog.iter_aggregates():
             logger.warn(str(agg))
 
+
 __all__ = [
     'FDSNSource',
 ]
