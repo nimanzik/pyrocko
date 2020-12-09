@@ -201,7 +201,7 @@ def process(get_pile, options):
 
     old = signal.signal(signal.SIGINT, got_sigint)
 
-    for traces in it:
+    def process_traces(traces):
         if traces:
             twmin = min(tr.wmin for tr in traces)
             twmax = max(tr.wmax for tr in traces)
@@ -259,7 +259,18 @@ def process(get_pile, options):
                     die(str(e))
 
         if abort:
-            break
+            return
+
+    try:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=int(options.nthreads)) as executor:
+            executor.map(process_traces, it, chunksize=1)
+
+    except ImportError:
+
+        for traces in it:
+            process_traces(traces)
 
     signal.signal(signal.SIGINT, old)
 
@@ -459,6 +470,13 @@ def main(args=None):
         help='set the mseed record length in bytes. Choices: %s. '
              'Default is 4096 bytes, which is commonly used for archiving.'
              % ', '.join(str(b) for b in io.mseed.VALID_RECORD_LENGTHS))
+
+    parser.add_option(
+        '--nthreads',
+        metavar='NTHREADS',
+        default=1,
+        help='number of threads for processing, '
+             'this can speed-up CPU bound tasks')
 
     (options, args) = parser.parse_args(args)
 
