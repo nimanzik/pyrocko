@@ -7,6 +7,7 @@ from __future__ import division, absolute_import
 from struct import unpack
 import os
 import re
+import math
 import logging
 
 from pyrocko import trace
@@ -15,6 +16,7 @@ from .io_common import FileLoadError, FileSaveError
 
 logger = logging.getLogger('pyrocko.io.mseed')
 
+MSEED_HEADER_BYTES = 64
 VALID_RECORD_LENGTHS = tuple(2**exp for exp in range(8, 20))
 
 
@@ -56,20 +58,21 @@ def iload(filename, load_data=True):
             '(maybe LOG traces)' % filename)
 
 
-def as_tuple(tr):
+def as_tuple(tr, dataquality='D'):
     from pyrocko import mseed_ext
     itmin = int(round(tr.tmin*mseed_ext.HPTMODULUS))
     itmax = int(round(tr.tmax*mseed_ext.HPTMODULUS))
     srate = 1.0/tr.deltat
     return (tr.network, tr.station, tr.location, tr.channel,
-            itmin, itmax, srate, tr.get_ydata())
+            itmin, itmax, srate, dataquality, tr.get_ydata())
 
 
 def save(traces, filename_template, additional={}, overwrite=True,
-         record_length=4096):
+         dataquality='D', record_length=4096):
     from pyrocko import mseed_ext
 
     assert record_length in VALID_RECORD_LENGTHS
+    assert dataquality in ('D', 'E', 'C', 'O', 'T', 'L'), 'invalid dataquality'
 
     fn_tr = {}
     for tr in traces:
@@ -96,7 +99,7 @@ def save(traces, filename_template, additional={}, overwrite=True,
         trtups = []
         traces_thisfile.sort(key=lambda a: a.full_id)
         for tr in traces_thisfile:
-            trtups.append(as_tuple(tr))
+            trtups.append(as_tuple(tr, dataquality))
 
         ensuredirs(fn)
         try:
@@ -109,6 +112,33 @@ def save(traces, filename_template, additional={}, overwrite=True,
 
 
 tcs = {}
+
+
+def get_bytes(traces, dataquality='D', record_length=4096):
+    from pyrocko import mseed_ext
+
+    assert record_length in VALID_RECORD_LENGTHS
+    assert dataquality in ('D', 'E', 'C', 'O', 'T', 'L'), 'invalid dataquality'
+
+    nbytes_approx = 0
+    rl = record_length
+    trtups = []
+    for tr in traces:
+        for code, maxlen, val in zip(
+                ['network', 'station', 'location', 'channel'],
+                [2, 5, 2, 3],
+                tr.nslc_id):
+
+            if len(val) > maxlen:
+                raise CodeTooLong(
+                    '%s code too long to be stored in MSeed file: %s' %
+                    (code, val))
+
+        nbytes_approx += math.ceil(
+            tr.ydata.nbytes / (rl-MSEED_HEADER_BYTES)) * rl
+        trtups.append(as_tuple(tr, dataquality))
+
+    return mseed_ext.mseed_bytes(trtups, nbytes_approx, record_length)
 
 
 def detect(first512):

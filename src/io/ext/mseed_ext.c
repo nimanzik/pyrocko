@@ -27,8 +27,7 @@ static struct module_state _state;
 
 
 static PyObject*
-mseed_get_traces (PyObject *m, PyObject *args)
-{
+mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
     char          *filename;
     MSTraceGroup  *mstg = NULL;
     MSTrace       *mst = NULL;
@@ -38,32 +37,30 @@ mseed_get_traces (PyObject *m, PyObject *args)
     PyObject      *out_traces = NULL;
     PyObject      *out_trace = NULL;
     int           numpytype;
-    char          strbuf[BUFSIZE];
     PyObject      *unpackdata = NULL;
 
     struct module_state *st = GETSTATE(m);
+    (void) m;
 
-    if (!PyArg_ParseTuple(args, "sO", &filename, &unpackdata)) {
-        PyErr_SetString(st->error, "usage get_traces(filename, dataflag)" );
+    static char *kwlist[] = {"filename", "dataflag", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|O", kwlist, &filename, &unpackdata))
         return NULL;
-    }
 
     if (!PyBool_Check(unpackdata)) {
-        PyErr_SetString(st->error, "Second argument must be a boolean" );
+        PyErr_SetString(st->error, "Second argument must be a boolean");
         return NULL;
     }
   
     /* get data from mseed file */
     retcode = ms_readtraces (&mstg, filename, 0, -1.0, -1.0, 0, 1, (unpackdata == Py_True), 0);
-    if ( retcode < 0 ) {
-        snprintf (strbuf, BUFSIZE, "Cannot read file '%s': %s", filename, ms_errorstr(retcode));
-        PyErr_SetString(st->error, strbuf);
+    if (retcode < 0 ) {
+        PyErr_Format(st->error, "Cannot read file '%s': %s", filename, ms_errorstr(retcode));
         return NULL;
     }
 
-    if ( ! mstg ) {
-        snprintf (strbuf, BUFSIZE, "Error reading file");
-        PyErr_SetString(st->error, strbuf);
+    if (! mstg) {
+        PyErr_SetString(st->error, "Error reading file");
         return NULL;
     }
 
@@ -72,8 +69,7 @@ mseed_get_traces (PyObject *m, PyObject *args)
         mst = mstg->traces;
         while (mst) {
             if (mst->datasamples == NULL) {
-                snprintf (strbuf, BUFSIZE, "Error reading file - datasamples is NULL");
-                PyErr_SetString(st->error, strbuf);
+                PyErr_SetString(st->error, "Error reading file - datasamples is NULL");
                 return NULL;
             }
             mst = mst->next;
@@ -92,45 +88,36 @@ mseed_get_traces (PyObject *m, PyObject *args)
             array_dims[0] = mst->numsamples;
             switch (mst->sampletype) {
                 case 'i':
-                    assert( ms_samplesize('i') == 4 );
+                    assert(ms_samplesize('i') == 4);
                     numpytype = NPY_INT32;
                     break;
                 case 'a':
-                    assert( ms_samplesize('a') == 1 );
+                    assert(ms_samplesize('a') == 1);
                     numpytype = NPY_INT8;
                     break;
                 case 'f':
-                    assert( ms_samplesize('f') == 4 );
+                    assert(ms_samplesize('f') == 4);
                     numpytype = NPY_FLOAT32;
                     break;
                 case 'd':
-                    assert( ms_samplesize('d') == 8 );
+                    assert(ms_samplesize('d') == 8);
                     numpytype = NPY_FLOAT64;
                     break;
                 default:
-                    snprintf (strbuf, BUFSIZE, "Unknown sampletype %c\n", mst->sampletype);
-                    PyErr_SetString(st->error, strbuf);
+                    PyErr_Format(st->error, "Unknown sampletype %c\n", mst->sampletype);
                     Py_XDECREF(out_traces);
                     return NULL;
             }
             array = PyArray_SimpleNew(1, array_dims, numpytype);
-            memcpy( PyArray_DATA((PyArrayObject*)array), mst->datasamples, mst->numsamples*ms_samplesize(mst->sampletype) );
+            memcpy(PyArray_DATA((PyArrayObject*)array), mst->datasamples, mst->numsamples*ms_samplesize(mst->sampletype));
         } else {
             Py_INCREF(Py_None);
             array = Py_None;
         }
 
-        out_trace = Py_BuildValue( "(c,s,s,s,s,L,L,d,N)",
-                                    mst->dataquality,
-                                    mst->network,
-                                    mst->station,
-                                    mst->location,
-                                    mst->channel,
-                                    mst->starttime,
-                                    mst->endtime,
-                                    mst->samprate,
-                                    array );
-
+        out_trace = Py_BuildValue("(c,s,s,s,s,L,L,d,N)",
+                                  mst->dataquality, mst->network, mst->station, mst->location, mst->channel,
+                                  mst->starttime, mst->endtime, mst->samprate, array);
         
         PyList_Append(out_traces, out_trace);
         Py_DECREF(out_trace);
@@ -142,161 +129,258 @@ mseed_get_traces (PyObject *m, PyObject *args)
     return out_traces;
 }
 
-static void record_handler (char *record, int reclen, void *outfile) {    
-    if ( fwrite(record, reclen, 1, outfile) != 1 ) {
-      fprintf(stderr, "Error writing mseed record to output file\n");
+static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
+    int           numpytype;
+    int           length;
+    char          *network, *station, *location, *channel, *dataquality;
+    PyObject      *array = NULL;
+    PyArrayObject *contiguous_array = NULL;
+
+    if (!PyTuple_Check(in_trace)) {
+        PyErr_SetString(PyExc_ValueError, "Trace record must be a tuple of (network, station, location, channel, starttime, endtime, samprate, dataquality, data).");
+        return EXIT_FAILURE;
     }
+    
+    if (!PyArg_ParseTuple(in_trace, "ssssLLdsO",
+                          &network, &station, &location, &channel,
+                          &mst->starttime, &mst->endtime, &mst->samprate, &dataquality, &array)) {
+        PyErr_SetString(PyExc_ValueError, "Trace record must be a tuple of (network, station, location, channel, starttime, endtime, samprate, dataquality, data).");
+        return EXIT_FAILURE;
+    }
+
+    strncpy(mst->network, network, 10);
+    strncpy(mst->station, station, 10);
+    strncpy(mst->location, location, 10);
+    strncpy(mst->channel, channel, 10);
+    mst->network[10] = '\0';
+    mst->station[10] = '\0';
+    mst->location[10] ='\0';
+    mst->channel[10] = '\0';
+    mst->dataquality = dataquality[0];
+
+    if (!PyArray_Check((PyArrayObject*) array)) {
+        PyErr_SetString(PyExc_ValueError, "Data must be given as NumPy array.");
+        return EXIT_FAILURE;
+    }
+
+    if (PyArray_ISBYTESWAPPED((PyArrayObject*) array)) {
+        PyErr_SetString(PyExc_ValueError, "Data must be given in machine byte-order.");
+        return EXIT_FAILURE;
+    }
+
+    numpytype = PyArray_TYPE((PyArrayObject*) array);
+    switch (numpytype) {
+        case NPY_INT32:
+            assert(ms_samplesize('i') == 4);
+            mst->sampletype = 'i';
+            *msdetype = DE_STEIM1;
+            break;
+        case NPY_BYTE:
+            assert(ms_samplesize('a') == 1);
+            mst->sampletype = 'a';
+            *msdetype = DE_ASCII;
+            break;
+        case NPY_FLOAT32:
+            assert(ms_samplesize('f') == 4);
+            mst->sampletype = 'f';
+            *msdetype = DE_FLOAT32;
+            break;
+        case NPY_FLOAT64:
+            assert(ms_samplesize('d') == 8);
+            mst->sampletype = 'd';
+            *msdetype = DE_FLOAT64;
+            break;
+        default:
+            PyErr_SetString(PyExc_ValueError, "Data must be of type float64, float32, int32 or int8.");
+            return EXIT_FAILURE;
+        }
+    contiguous_array = PyArray_GETCONTIGUOUS((PyArrayObject*) array);
+
+    length = PyArray_SIZE(contiguous_array);
+    mst->numsamples = length;
+    mst->samplecnt = length;
+
+    mst->datasamples = calloc(length, ms_samplesize(mst->sampletype));
+    if (memcpy(mst->datasamples, PyArray_DATA(contiguous_array), length*ms_samplesize(mst->sampletype)) == NULL) {
+        Py_DECREF(contiguous_array);
+        PyErr_SetString(PyExc_MemoryError, "Could not copy memory.");
+        return EXIT_FAILURE;
+    }
+
+    Py_DECREF(contiguous_array);
+    return EXIT_SUCCESS;
+}
+
+
+static void write_mseed_file(char *record, int reclen, void *outfile) {
+    if (fwrite(record, reclen, 1, outfile) != 1 )
+        fprintf(stderr, "Error writing mseed record to output file\n");
+}
+
+
+static PyObject*
+mseed_store_traces (PyObject *m, PyObject *args, PyObject *kwds) {
+    char          *filename;
+    MSTrace       *mst = NULL;
+    PyObject      *in_traces = NULL;
+    PyObject      *in_trace = NULL;
+    int           itr;
+    int           msdetype = DE_FLOAT64;
+    int64_t       psamples;
+    size_t        record_length = 4096;
+    
+    FILE          *outfile;
+
+    (void) m;
+
+    static char *kwlist[] = {"traces", "filename", "record_length", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Os|n", kwlist, &in_traces, &filename, &record_length))
+        return NULL;
+
+    if (!PySequence_Check(in_traces)) {
+        PyErr_SetString(PyExc_TypeError, "Traces is not of sequence type.");
+        return NULL;
+    }
+
+    outfile = fopen(filename, "w");
+    if (outfile == NULL) {
+        PyErr_SetString(PyExc_OSError, "Error opening file.");
+        return NULL;
+    }
+
+    for (itr=0; itr < PySequence_Length(in_traces); itr++) {
+
+        in_trace = PySequence_GetItem(in_traces, itr);
+        mst = mst_init(NULL);
+
+        if (tuple2mst(in_trace, mst, &msdetype) != EXIT_SUCCESS) {
+            mst_free(&mst);
+            fclose(outfile);
+
+            Py_DECREF(in_trace);
+            return NULL;
+        }
+
+        Py_BEGIN_ALLOW_THREADS
+        mst_pack(mst, &write_mseed_file, outfile, record_length, msdetype,
+                 1, &psamples, 1, 0, NULL);
+        mst_free(&mst);
+        Py_END_ALLOW_THREADS
+
+        Py_DECREF(in_trace);
+    }
+    fclose(outfile);
+    Py_RETURN_NONE;
+}
+
+typedef struct MemoryInfo_t {
+    void *head;
+    size_t capacity;
+    size_t nbytes_written;
+} MemoryInfo;
+
+
+static void copy_memory(char *record, int reclen, void *mem) {
+    MemoryInfo *info = (MemoryInfo*) mem;
+    if (memcpy(info->head, record, reclen) == NULL)
+        fprintf(stderr, "Could not write to memory\n");
+    info->head = (void *) (char *) info->head + reclen;
+    info->nbytes_written += (size_t) reclen;
 }
 
 static PyObject*
-mseed_store_traces (PyObject *m, PyObject *args)
-{
-    char          *filename;
+mseed_bytes (PyObject *m, PyObject *args, PyObject *kwds) {
     MSTrace       *mst = NULL;
-    PyObject      *array = NULL;
+    MSRecord      *msr = NULL;
     PyObject      *in_traces = NULL;
     PyObject      *in_trace = NULL;
-    PyArrayObject *contiguous_array = NULL;
-    int           i;
-    char          *network, *station, *location, *channel;
-    char          mstype;
-    int           msdetype;
+    PyObject      *mseed_data;
+    Py_buffer     buffer;
+    int           itr;
+    int           msdetype = DE_FLOAT64;
     int64_t       psamples;
-    int           numpytype;
-    int           length;
+    size_t        nbytes;
     size_t        record_length = 4096;
-    FILE          *outfile;
 
-    struct module_state *st = GETSTATE(m);
+    MemoryInfo   mem_info;
 
-    if (!PyArg_ParseTuple(args, "Os|n", &in_traces, &filename, &record_length)) {
-        PyErr_SetString(st->error, "usage store_traces(traces, filename, record_length)" );
+    static char *kwlist[] = {"traces", "nbytes", "record_length", NULL};
+
+    (void) m;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "On|n", kwlist, &in_traces, &nbytes, &record_length))
         return NULL;
-    }
-    if (!PySequence_Check( in_traces )) {
-        PyErr_SetString(st->error, "Traces is not of sequence type." );
-        return NULL;
-    }
 
-    outfile = fopen(filename, "w" );
-    if (outfile == NULL) {
-        PyErr_SetString(st->error, "Error opening file.");
+    if (!PySequence_Check(in_traces)) {
+        PyErr_SetString(PyExc_TypeError, "traces is not of sequence type");
         return NULL;
     }
 
-    for (i=0; i<PySequence_Length(in_traces); i++) {
-        
-        in_trace = PySequence_GetItem(in_traces, i);
-        if (!PyTuple_Check(in_trace)) {
-            PyErr_SetString(st->error, "Trace record must be a tuple of (network, station, location, channel, starttime, endtime, samprate, data)." );
-            Py_DECREF(in_trace);
-            return NULL;
-        }
-        mst = mst_init (NULL);
-        
-        if (!PyArg_ParseTuple(in_trace, "ssssLLdO",
-                                    &network,
-                                    &station,
-                                    &location,
-                                    &channel,
-                                    &(mst->starttime),
-                                    &(mst->endtime),
-                                    &(mst->samprate),
-                                    &array )) {
-            PyErr_SetString(st->error, "Trace record must be a tuple of (network, station, location, channel, starttime, endtime, samprate, data)." );
-            mst_free( &mst );  
-            Py_DECREF(in_trace);
-            return NULL;
-        }
+    mseed_data = PyBytes_FromStringAndSize(NULL, (Py_ssize_t) nbytes);
+    if (mseed_data == NULL) {
+        PyErr_SetString(PyExc_BufferError, "could not create bytes object");
+        return NULL;
+    }
 
-        strncpy( mst->network, network, 10);
-        strncpy( mst->station, station, 10);
-        strncpy( mst->location, location, 10);
-        strncpy( mst->channel, channel, 10);
-        mst->network[10] = '\0';
-        mst->station[10] = '\0';
-        mst->location[10] ='\0';
-        mst->channel[10] = '\0';
+    if (PyObject_GetBuffer(mseed_data, &buffer, PyBUF_SIMPLE) == -1) {
+        PyErr_SetString(PyExc_BufferError, "could not get buffer");
+        return NULL;
+    }
 
-        if (!PyArray_Check(array)) {
-            PyErr_SetString(st->error, "Data must be given as NumPy array." );
-            mst_free( &mst );
-            Py_DECREF(in_trace);
-            return NULL;
-        }
-        if (PyArray_ISBYTESWAPPED((PyArrayObject*)array)) {
-            PyErr_SetString(st->error, "Data must be given in machine byte-order" );
-            mst_free( &mst );
+    mem_info.head = buffer.buf;
+    mem_info.capacity = nbytes;
+    mem_info.nbytes_written = 0;
+
+    msr = msr_init(NULL);
+    msr->sequence_number = 0;
+
+    for (itr=0; itr < PySequence_Length(in_traces); itr++) {
+        in_trace = PySequence_GetItem(in_traces, itr);
+        mst = mst_init(NULL);
+
+        if (tuple2mst(in_trace, mst, &msdetype) != EXIT_SUCCESS) {
+            mst_free(&mst);
+            msr_free(&msr);
             Py_DECREF(in_trace);
             return NULL;
         }
 
-        numpytype = PyArray_TYPE((PyArrayObject*)array);
-        switch (numpytype) {
-                case NPY_INT32:
-                    assert( ms_samplesize('i') == 4 );
-                    mstype = 'i';
-                    msdetype = DE_STEIM1;
-                    break;
-                case NPY_INT8:
-                    assert( ms_samplesize('a') == 1 );
-                    mstype = 'a';
-                    msdetype = DE_ASCII;
-                    break;
-                case NPY_FLOAT32:
-                    assert( ms_samplesize('f') == 4 );
-                    mstype = 'f';
-                    msdetype = DE_FLOAT32;
-                    break;
-                case NPY_FLOAT64:
-                    assert( ms_samplesize('d') == 8 );
-                    mstype = 'd';
-                    msdetype = DE_FLOAT64;
-                    break;
-                default:
-                    PyErr_SetString(st->error, "Data must be of type float64, float32, int32 or int8.");
-                    mst_free( &mst );  
-                    Py_DECREF(in_trace);
-                    return NULL;
-            }
-        mst->sampletype = mstype;
+        Py_BEGIN_ALLOW_THREADS
+        mst_pack(mst, &copy_memory, (void *) &mem_info, record_length, msdetype,
+                 1, &psamples, 1, 0, NULL);
+        mst_free(&mst);
+        Py_END_ALLOW_THREADS
 
-        contiguous_array = PyArray_GETCONTIGUOUS((PyArrayObject*)array);
-
-        length = PyArray_SIZE(contiguous_array);
-        mst->numsamples = length;
-        mst->samplecnt = length;
-
-        mst->datasamples = calloc(length,ms_samplesize(mstype));
-        memcpy(mst->datasamples, PyArray_DATA(contiguous_array), length*ms_samplesize(mstype));
-        Py_DECREF(contiguous_array);
-
-        mst_pack (mst, &record_handler, outfile, record_length, msdetype,
-                                     1, &psamples, 1, 0, NULL);
-        mst_free( &mst );
         Py_DECREF(in_trace);
     }
-    fclose( outfile );
+    PyBuffer_Release(&buffer);
+    msr_free(&msr);
 
-    Py_INCREF(Py_None);
-    return Py_None;
+    if (_PyBytes_Resize(&mseed_data, (Py_ssize_t) mem_info.nbytes_written) == -1) {
+        PyErr_SetString(PyExc_BufferError, "could not resize bytes object");
+        return NULL;
+    }
+    return mseed_data;
 }
 
-
 static PyMethodDef mseed_ext_methods[] = {
-    {"get_traces",  mseed_get_traces, METH_VARARGS, 
-    "get_traces(filename, dataflag)\n"
-    "Get all traces stored in an mseed file.\n\n"
-    "Returns a list of tuples, one tuple for each trace in the file. Each tuple\n"
-    "has 9 elements:\n\n"
-    "  (dataquality, network, station, location, channel,\n"
-    "    startime, endtime, samprate, data)\n\n"
-    "These come straight from the MSTrace data structure, defined and described\n"
-    "in libmseed. If dataflag is True, `data` is a numpy array containing the\n"
-    "data. If dataflag is False, the data is not unpacked and `data` is None.\n" },
+    {"get_traces", (PyCFunction) mseed_get_traces, METH_VARARGS | METH_KEYWORDS, 
+     PyDoc_STR("get_traces(filename, dataflag)\n"
+               "Get all traces stored in an mseed file.\n\n"
+               "Returns a list of tuples, one tuple for each trace in the file. Each tuple\n"
+               "has 9 elements:\n\n"
+               "  (dataquality, network, station, location, channel,\n"
+               "   startime, endtime, samprate, data)\n\n"
+               "These come straight from the MSTrace data structure, defined and described\n"
+               "in libmseed. If dataflag is True, `data` is a numpy array containing the\n"
+               "data. If dataflag is False, the data is not unpacked and `data` is None.\n") },
 
-    {"store_traces",  mseed_store_traces, METH_VARARGS, 
-    "store_traces(traces, filename)\n" },
+    {"store_traces", (PyCFunction) mseed_store_traces, METH_VARARGS | METH_KEYWORDS, 
+     PyDoc_STR("store_traces(traces, filename, record_length=4096)\n") },
+
+    {"mseed_bytes", (PyCFunction) mseed_bytes, METH_VARARGS | METH_KEYWORDS, 
+     PyDoc_STR("mseed_bytes(traces, nbytes, record_length=4096)\n") },
 
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };

@@ -136,6 +136,26 @@ class IOTestCase(unittest.TestCase):
         fpath = common.test_data_file('test2.mseed')
         io.load(fpath, format='detect')
 
+    def testMSeedBytes(self):
+        from pyrocko.io.mseed import get_bytes
+        c = '12'
+        nsample = 100
+        for exp in range(8, 20):
+            record_length = 2**exp
+
+            for dtype in (num.float32, num.int32):
+                tr = trace.Trace(
+                    c, c, c, c, ydata=num.random.randint(
+                        0, 1000, size=nsample).astype(dtype))
+
+                mseed_bytes = get_bytes([tr], record_length=record_length)
+                with tempfile.NamedTemporaryFile('wb') as f:
+                    f.write(mseed_bytes)
+                    f.flush()
+
+                    ltr = io.load(f.name, format='mseed')[0]
+                    num.testing.assert_equal(tr.ydata, ltr.ydata)
+
     def testReadSEGY(self):
         fpath = common.test_data_file('test2.segy')
         i = 0
