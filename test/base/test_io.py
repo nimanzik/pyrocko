@@ -156,6 +156,30 @@ class IOTestCase(unittest.TestCase):
                     ltr = io.load(f.name, format='mseed')[0]
                     num.testing.assert_equal(tr.ydata, ltr.ydata)
 
+    def testMSeedAppend(self):
+        c = '12'
+        nsample = 100
+        deltat = .01
+
+        def get_ydata():
+            return num.random.randint(
+                0, 1000, size=nsample).astype(num.int32)
+
+        tr1 = trace.Trace(
+            c, c, c, c,
+            ydata=get_ydata(), tmin=0., deltat=deltat)
+        tr2 = trace.Trace(
+            c, c, c, c,
+            ydata=get_ydata(), tmin=0. + nsample*deltat, deltat=deltat)
+
+        with tempfile.NamedTemporaryFile('wb') as f:
+            io.save([tr1], f.name)
+            io.save([tr2], f.name, append=True)
+            tr_load = io.load(f.name)[0]
+
+        num.testing.assert_equal(
+            tr_load.ydata, num.concatenate([tr1.ydata, tr2.ydata]))
+
     def testReadSEGY(self):
         fpath = common.test_data_file('test2.segy')
         i = 0

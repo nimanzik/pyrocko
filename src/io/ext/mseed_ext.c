@@ -224,6 +224,7 @@ mseed_store_traces (PyObject *m, PyObject *args, PyObject *kwds) {
     MSTrace       *mst = NULL;
     PyObject      *in_traces = NULL;
     PyObject      *in_trace = NULL;
+    PyObject      *append = NULL;
     int           itr;
     int           msdetype = DE_FLOAT64;
     int64_t       psamples;
@@ -231,11 +232,12 @@ mseed_store_traces (PyObject *m, PyObject *args, PyObject *kwds) {
     
     FILE          *outfile;
 
+
     (void) m;
 
-    static char *kwlist[] = {"traces", "filename", "record_length", NULL};
+    static char *kwlist[] = {"traces", "filename", "record_length", "append", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Os|n", kwlist, &in_traces, &filename, &record_length))
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "Os|nO", kwlist, &in_traces, &filename, &record_length, &append))
         return NULL;
 
     if (!PySequence_Check(in_traces)) {
@@ -243,7 +245,12 @@ mseed_store_traces (PyObject *m, PyObject *args, PyObject *kwds) {
         return NULL;
     }
 
-    outfile = fopen(filename, "w");
+    if (!PyBool_Check(append)) {
+        PyErr_SetString(PyExc_TypeError, "append must be a boolean");
+        return NULL;
+    }
+
+    outfile = fopen(filename, append == Py_True ? "a" : "w");
     if (outfile == NULL) {
         PyErr_SetString(PyExc_OSError, "Error opening file.");
         return NULL;

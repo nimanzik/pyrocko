@@ -68,11 +68,12 @@ def as_tuple(tr, dataquality='D'):
 
 
 def save(traces, filename_template, additional={}, overwrite=True,
-         dataquality='D', record_length=4096):
+         dataquality='D', record_length=4096, append=False):
     from pyrocko import mseed_ext
 
     assert record_length in VALID_RECORD_LENGTHS
     assert dataquality in ('D', 'E', 'C', 'O', 'T', 'L'), 'invalid dataquality'
+    overwrite = True if append else overwrite
 
     fn_tr = {}
     for tr in traces:
@@ -103,7 +104,7 @@ def save(traces, filename_template, additional={}, overwrite=True,
 
         ensuredirs(fn)
         try:
-            mseed_ext.store_traces(trtups, fn, record_length)
+            mseed_ext.store_traces(trtups, fn, record_length, append)
         except mseed_ext.MSeedError as e:
             raise FileSaveError(
                 str(e) + ' (while storing traces to file \'%s\')' % fn)
