@@ -24,13 +24,15 @@ class CodeTooLong(FileSaveError):
     pass
 
 
-def iload(filename, load_data=True):
+def iload(filename, load_data=True, segmented_traces=False, segment=-1, segment_nrecords=512):
     from pyrocko import mseed_ext
 
     have_zero_rate_traces = False
     try:
         traces = []
-        for tr in mseed_ext.get_traces(filename, load_data):
+        for tr in mseed_ext.get_traces(
+                filename, load_data,
+                segmented_traces, segment, segment_nrecords):
             network, station, location, channel = tr[1:5]
             tmin = float(tr[5])/float(mseed_ext.HPTMODULUS)
             tmax = float(tr[6])/float(mseed_ext.HPTMODULUS)

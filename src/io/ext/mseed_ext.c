@@ -23,7 +23,66 @@ struct module_state {
 static struct module_state _state;
 #endif
 
-#define BUFSIZE 1024
+
+/*********************************************************************
+ * ms_readtraces:
+ *
+ * This is a simple wrapper for ms_readtraces_selection() that uses no
+ * selections.
+ *
+ * See the comments with ms_readtraces_selection() for return values
+ * and further description of arguments.
+ *********************************************************************/
+static int
+pyrocko_ms_readtraces (MSTraceGroup **ppmstg, const char *msfile, flag dataflag, int segment, int segment_nrecords)
+{
+  MSRecord *msr     = NULL;
+  MSFileParam *msfp = NULL;
+  int retcode;
+  int reclen_detected = 0;
+  off_t fpos = 0;
+
+  if (!ppmstg)
+    return MS_GENERROR;
+
+  /* Initialize MSTraceGroup if needed */
+  if (!*ppmstg)
+  {
+    *ppmstg = mst_initgroup (*ppmstg);
+
+    if (!*ppmstg) {
+      return MS_GENERROR;
+    }
+  }
+
+  /* Loop over the input file */
+  while ((retcode = ms_readmsr_main (&msfp, &msr, msfile, 0, fpos ? &fpos : NULL, NULL,
+                                     1, dataflag, NULL, 0)) == MS_NOERROR)
+  {
+    /* Add to trace group */
+
+    if ((segment >= 0) && (reclen_detected == 0)) {
+        reclen_detected = msr->reclen;
+        fpos = -reclen_detected * segment_nrecords * segment;
+
+        if ((-1 * fpos) >= msfp->filesize) {
+            retcode = MS_ENDOFFILE;
+            break;
+        }
+
+        ms_readmsr_main (&msfp, &msr, NULL, 0, NULL, NULL, 0, 0, NULL, 0);
+        continue;
+    }
+    mst_addmsrtogroup (*ppmstg, msr, 0, -1., -1.);
+
+    if ((segment >= 0) && (msfp->recordcount >= segment_nrecords))
+        break;
+
+  }
+
+  ms_readmsr_main (&msfp, &msr, NULL, 0, NULL, NULL, 0, 0, NULL, 0);
+  return retcode;
+}
 
 
 static PyObject*
@@ -38,94 +97,124 @@ mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
     PyObject      *out_trace = NULL;
     int           numpytype;
     PyObject      *unpackdata = NULL;
+    PyObject      *segmented_traces = NULL;
+
+    int           segment = -1;
+    int           segmented_trs = 0;
+    int           segment_nrecords = 512;
 
     struct module_state *st = GETSTATE(m);
     (void) m;
 
-    static char *kwlist[] = {"filename", "dataflag", NULL};
+    static char *kwlist[] = {"filename", "dataflag", "segmented_traces", "segment", "segment_nrecords", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|O", kwlist, &filename, &unpackdata))
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|OOii", kwlist, &filename, &unpackdata, &segmented_traces, &segment, &segment_nrecords))
         return NULL;
 
     if (!PyBool_Check(unpackdata)) {
-        PyErr_SetString(st->error, "Second argument must be a boolean");
+        PyErr_SetString(st->error, "dataflag argument must be a boolean");
         return NULL;
     }
-  
-    /* get data from mseed file */
-    retcode = ms_readtraces (&mstg, filename, 0, -1.0, -1.0, 0, 1, (unpackdata == Py_True), 0);
-    if (retcode < 0 ) {
-        PyErr_Format(st->error, "Cannot read file '%s': %s", filename, ms_errorstr(retcode));
+    if (!PyBool_Check(segmented_traces)) {
+        PyErr_SetString(st->error, "segment argument must be a boolean");
         return NULL;
     }
-
-    if (! mstg) {
-        PyErr_SetString(st->error, "Error reading file");
+    if (segment_nrecords <= 0) {
+        PyErr_SetString(st->error, "segment_nrecords must be positive");
         return NULL;
     }
 
-    /* check that there is data in the traces */
-    if (unpackdata == Py_True) {
-        mst = mstg->traces;
-        while (mst) {
-            if (mst->datasamples == NULL) {
-                PyErr_SetString(st->error, "Error reading file - datasamples is NULL");
-                return NULL;
-            }
-            mst = mst->next;
-        }
+    if (segmented_traces == Py_True) {
+        segmented_trs = 1;
+        segment = 0;
     }
 
     out_traces = Py_BuildValue("[]");
-
-    mst = mstg->traces;
-
-    /* convert data to python tuple */
-
-    while (mst) {
-        
-        if (unpackdata == Py_True) {
-            array_dims[0] = mst->numsamples;
-            switch (mst->sampletype) {
-                case 'i':
-                    assert(ms_samplesize('i') == 4);
-                    numpytype = NPY_INT32;
-                    break;
-                case 'a':
-                    assert(ms_samplesize('a') == 1);
-                    numpytype = NPY_INT8;
-                    break;
-                case 'f':
-                    assert(ms_samplesize('f') == 4);
-                    numpytype = NPY_FLOAT32;
-                    break;
-                case 'd':
-                    assert(ms_samplesize('d') == 8);
-                    numpytype = NPY_FLOAT64;
-                    break;
-                default:
-                    PyErr_Format(st->error, "Unknown sampletype %c\n", mst->sampletype);
-                    Py_XDECREF(out_traces);
-                    return NULL;
-            }
-            array = PyArray_SimpleNew(1, array_dims, numpytype);
-            memcpy(PyArray_DATA((PyArrayObject*)array), mst->datasamples, mst->numsamples*ms_samplesize(mst->sampletype));
-        } else {
-            Py_INCREF(Py_None);
-            array = Py_None;
+    while (1) {
+        /* get data from mseed file */
+        retcode = pyrocko_ms_readtraces(&mstg, filename, (unpackdata == Py_True), segment, segment_nrecords);
+        if (retcode < 0) {
+            PyErr_Format(st->error, "Cannot read file '%s': %s", filename, ms_errorstr(retcode));
+            Py_XDECREF(out_traces);
+            return NULL;
         }
 
-        out_trace = Py_BuildValue("(c,s,s,s,s,L,L,d,N)",
-                                  mst->dataquality, mst->network, mst->station, mst->location, mst->channel,
-                                  mst->starttime, mst->endtime, mst->samprate, array);
-        
-        PyList_Append(out_traces, out_trace);
-        Py_DECREF(out_trace);
-        mst = mst->next;
+        if (! mstg) {
+            PyErr_SetString(st->error, "Error reading file");
+            Py_XDECREF(out_traces);
+            return NULL;
+        }
+
+        /* check that there is data in the traces */
+        if (unpackdata == Py_True) {
+            mst = mstg->traces;
+            while (mst) {
+                if (mst->datasamples == NULL) {
+                    PyErr_SetString(st->error, "Error reading file - datasamples is NULL");
+                    Py_XDECREF(out_traces);
+                    return NULL;
+                }
+                mst = mst->next;
+            }
+        }
+
+        mst = mstg->traces;
+        while (mst) {
+            
+            if (unpackdata == Py_True) {
+                array_dims[0] = mst->numsamples;
+                switch (mst->sampletype) {
+                    case 'i':
+                        assert(ms_samplesize('i') == 4);
+                        numpytype = NPY_INT32;
+                        break;
+                    case 'a':
+                        assert(ms_samplesize('a') == 1);
+                        numpytype = NPY_INT8;
+                        break;
+                    case 'f':
+                        assert(ms_samplesize('f') == 4);
+                        numpytype = NPY_FLOAT32;
+                        break;
+                    case 'd':
+                        assert(ms_samplesize('d') == 8);
+                        numpytype = NPY_FLOAT64;
+                        break;
+                    default:
+                        PyErr_Format(st->error, "Unknown sampletype %c\n", mst->sampletype);
+                        Py_XDECREF(out_traces);
+                        mst_freegroup (&mstg);
+                        return NULL;
+                }
+                array = PyArray_SimpleNew(1, array_dims, numpytype);
+                memcpy(PyArray_DATA((PyArrayObject*)array), mst->datasamples, mst->numsamples*ms_samplesize(mst->sampletype));
+            } else {
+                Py_INCREF(Py_None);
+                array = Py_None;
+            }
+
+            /* convert data to python tuple */
+            out_trace = Py_BuildValue("(c,s,s,s,s,L,L,d,N)",
+                                      mst->dataquality, mst->network, mst->station, mst->location, mst->channel,
+                                      mst->starttime, mst->endtime, mst->samprate, array);
+            
+            PyList_Append(out_traces, out_trace);
+            Py_DECREF(out_trace);
+            mst = mst->next;
+        }
+
+        if (segmented_trs) {
+            segment++;
+            mst_freegroup(&mstg);
+        }
+
+        if (retcode == MS_ENDOFFILE)
+            break;
+        if (!segmented_trs && (segment >= 0))
+            break;
     }
 
     mst_freegroup (&mstg);
-
     return out_traces;
 }
 

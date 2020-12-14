@@ -180,6 +180,38 @@ class IOTestCase(unittest.TestCase):
         num.testing.assert_equal(
             tr_load.ydata, num.concatenate([tr1.ydata, tr2.ydata]))
 
+    def testMSeedSegmented(self):
+        from pyrocko.io.mseed import iload
+        c = '12'
+        nsample = 500
+        deltat = .01
+
+        def get_ydata():
+            return num.random.randint(
+                0, 1000, size=nsample).astype(num.int32)
+
+        tr1 = trace.Trace(
+            c, c, c, c,
+            ydata=get_ydata(), tmin=0., deltat=deltat)
+
+        with tempfile.NamedTemporaryFile('wb') as f:
+            io.save([tr1], f.name, record_length=512)
+            trs = [tr for tr in iload(
+                    f.name,
+                    segmented_traces=True,
+                    segment_nrecords=1)]
+
+            trs_nsamples = sum(tr.ydata.size for tr in trs)
+            assert nsample == trs_nsamples
+            assert len(trs) == os.path.getsize(f.name) // 512
+
+            trs = [tr for tr in iload(
+                    f.name,
+                    segment=1,
+                    segment_nrecords=1)]
+            assert len(trs) == 1
+            assert trs[0].tmin != 0.
+
     def testReadSEGY(self):
         fpath = common.test_data_file('test2.segy')
         i = 0
