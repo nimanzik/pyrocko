@@ -30,6 +30,7 @@ def iload(filename, load_data=True, segmented_traces=False, segment=-1, segment_
     have_zero_rate_traces = False
     try:
         traces = []
+        segments = []
         for tr in mseed_ext.get_traces(
                 filename, load_data,
                 segmented_traces, segment, segment_nrecords):
@@ -48,8 +49,13 @@ def iload(filename, load_data=True, segmented_traces=False, segment=-1, segment_
                 network, station, location, channel, tmin, tmax,
                 deltat, ydata))
 
-        for tr in traces:
-            yield tr
+            segments.append(tr[9])
+
+        for tr, seg in zip(traces, segments):
+            if segmented_traces:
+                yield tr, seg
+            else:
+                yield tr
 
     except (OSError, mseed_ext.MSeedError) as e:
         raise FileLoadError(str(e)+' (file: %s)' % filename)

@@ -196,7 +196,7 @@ class IOTestCase(unittest.TestCase):
 
         with tempfile.NamedTemporaryFile('wb') as f:
             io.save([tr1], f.name, record_length=512)
-            trs = [tr for tr in iload(
+            trs = [tr for tr, seg in iload(
                     f.name,
                     segmented_traces=True,
                     segment_nrecords=1)]

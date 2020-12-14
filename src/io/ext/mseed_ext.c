@@ -194,9 +194,9 @@ mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
             }
 
             /* convert data to python tuple */
-            out_trace = Py_BuildValue("(c,s,s,s,s,L,L,d,N)",
+            out_trace = Py_BuildValue("(c,s,s,s,s,L,L,d,N,d)",
                                       mst->dataquality, mst->network, mst->station, mst->location, mst->channel,
-                                      mst->starttime, mst->endtime, mst->samprate, array);
+                                      mst->starttime, mst->endtime, mst->samprate, array, segment);
             
             PyList_Append(out_traces, out_trace);
             Py_DECREF(out_trace);
