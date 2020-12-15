@@ -143,10 +143,10 @@ class IOTestCase(unittest.TestCase):
         for exp in range(8, 20):
             record_length = 2**exp
 
-            for dtype in (num.float32, num.int32):
+            for dtype in (num.int32, num.float32, num.float64, num.int16):
                 tr = trace.Trace(
                     c, c, c, c, ydata=num.random.randint(
-                        0, 1000, size=nsample).astype(dtype))
+                        -200, 200, size=nsample).astype(dtype))
 
                 mseed_bytes = get_bytes([tr], record_length=record_length)
                 with tempfile.NamedTemporaryFile('wb') as f:
@@ -163,7 +163,7 @@ class IOTestCase(unittest.TestCase):
 
         def get_ydata():
             return num.random.randint(
-                0, 1000, size=nsample).astype(num.int32)
+                -1000, 1000, size=nsample).astype(num.int32)
 
         tr1 = trace.Trace(
             c, c, c, c,

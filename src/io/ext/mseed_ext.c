@@ -99,7 +99,6 @@ mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
     PyObject      *unpackdata = NULL;
 
     int           segment = -1;
-    int           segmented_trs = 0;
     int           segment_nrecords = 512;
 
     struct module_state *st = GETSTATE(m);
@@ -198,7 +197,7 @@ mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
 
 static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
     int           numpytype;
-    int           length;
+    size_t           length;
     char          *network, *station, *location, *channel, *dataquality;
     PyObject      *array = NULL;
     PyArrayObject *contiguous_array = NULL;
@@ -241,6 +240,8 @@ static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
             assert(ms_samplesize('i') == 4);
             mst->sampletype = 'i';
             *msdetype = DE_INT16;
+            array = PyArray_Cast((PyArrayObject*) array, NPY_INT32);
+            break;
         case NPY_INT32:
             assert(ms_samplesize('i') == 4);
             mst->sampletype = 'i';
@@ -262,7 +263,7 @@ static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
             *msdetype = DE_FLOAT64;
             break;
         default:
-            PyErr_SetString(PyExc_ValueError, "Data must be of type float64, float32, int32 or int8.");
+            PyErr_SetString(PyExc_ValueError, "Data must be of type float64, float32, int32. int16 or int8.");
             return EXIT_FAILURE;
         }
     contiguous_array = PyArray_GETCONTIGUOUS((PyArrayObject*) array);
@@ -272,7 +273,7 @@ static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
     mst->samplecnt = length;
 
     mst->datasamples = calloc(length, ms_samplesize(mst->sampletype));
-    if (memcpy(mst->datasamples, PyArray_DATA(contiguous_array), length*ms_samplesize(mst->sampletype)) == NULL) {
+    if (memcpy(mst->datasamples, PyArray_DATA(contiguous_array), length*PyArray_ITEMSIZE(contiguous_array)) == NULL) {
         Py_DECREF(contiguous_array);
         PyErr_SetString(PyExc_MemoryError, "Could not copy memory.");
         return EXIT_FAILURE;
