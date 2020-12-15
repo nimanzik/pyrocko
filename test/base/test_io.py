@@ -196,10 +196,15 @@ class IOTestCase(unittest.TestCase):
 
         with tempfile.NamedTemporaryFile('wb') as f:
             io.save([tr1], f.name, record_length=512)
-            trs = [tr for tr, seg in iload(
-                    f.name,
-                    segmented_traces=True,
-                    segment_nrecords=1)]
+
+            segment = 0
+            trs = []
+            while True:
+                tr = tuple(iload(f.name, segment=segment, segment_nrecords=1))
+                if not tr:
+                    break
+                trs.extend(tr)
+                segment += 1
 
             trs_nsamples = sum(tr.ydata.size for tr in trs)
             assert nsample == trs_nsamples
