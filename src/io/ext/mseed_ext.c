@@ -23,6 +23,8 @@ struct module_state {
 static struct module_state _state;
 #endif
 
+#define OFF_MAX ~((off_t)1 << (sizeof(off_t) * 8 - 1))
+#define OFF_MIN  ((off_t)1 << (sizeof(off_t) * 8 - 1))
 
 /*********************************************************************
  * ms_readtraces:
@@ -39,8 +41,6 @@ pyrocko_ms_readtraces (MSTraceGroup **ppmstg, const char *msfile, flag dataflag,
   MSRecord *msr     = NULL;
   MSFileParam *msfp = NULL;
   int retcode;
-  int reclen_detected = 0;
-  size_t segment_nrecords;
   off_t fpos = 0;
 
   if (!ppmstg)
@@ -56,10 +56,7 @@ pyrocko_ms_readtraces (MSTraceGroup **ppmstg, const char *msfile, flag dataflag,
     }
   }
 
-  if (offset > 0)
-    fpos = -1 * (*offset);
-
-  fprintf(stderr, "%d %d\n", offset, segment_size);
+  fpos = -1 * (*offset);
 
   /* Loop over the input file */
   while ((retcode = ms_readmsr_main(&msfp, &msr, msfile, 0, fpos ? &fpos : NULL, NULL,
@@ -68,8 +65,11 @@ pyrocko_ms_readtraces (MSTraceGroup **ppmstg, const char *msfile, flag dataflag,
     /* Add to trace group */
     mst_addmsrtogroup (*ppmstg, msr, 0, -1., -1.);
 
-    if ((segment_size > 0) && ((fpos - *offset) > segment_size)) {
-        *offset = fpos;
+    if ((segment_size > 0) && ((msfp->filepos - *offset) >= segment_size)) {
+        *offset = msfp->filepos;
+        if (msfp->filepos == msfp->filesize) {
+            retcode = MS_ENDOFFILE;
+        }
         break;
     }
   }
@@ -93,37 +93,55 @@ mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
     PyObject      *unpackdata = NULL;
 
     off_t         offset = 0;
-    int           segment_size = 0;
+    off_t         segment_size = 0;
+    long long     offset_temp = 0;
+    long long     segment_size_temp = 0;
 
     struct module_state *st = GETSTATE(m);
     (void) m;
 
     static char *kwlist[] = {"filename", "dataflag", "offset", "segment_size", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|Oii", kwlist, &filename, &unpackdata, &offset, &segment_size))
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|OLi", kwlist, &filename, &unpackdata, &offset_temp, &segment_size_temp))
         return NULL;
+
+
+    if (offset_temp > OFF_MAX || offset_temp < OFF_MIN) {
+        PyErr_SetString(st->error, "invalid value: offset_temp");
+        return NULL;
+    }
+
+    offset = (off_t)offset_temp;
+
+    if (segment_size_temp > OFF_MAX || segment_size_temp < OFF_MIN) {
+        PyErr_SetString(st->error, "invalid value: segment_size");
+        return NULL;
+    }
+
+    segment_size = (off_t)segment_size_temp;
 
     if (!PyBool_Check(unpackdata)) {
         PyErr_SetString(st->error, "dataflag argument must be a boolean");
         return NULL;
     }
-    if (segment_size <= 0) {
+    if (segment_size < 0) {
         PyErr_SetString(st->error, "segment_size must be positive");
         return NULL;
     }
 
-    out_traces = Py_BuildValue("[]");
     /* get data from mseed file */
+    Py_BEGIN_ALLOW_THREADS
     retcode = pyrocko_ms_readtraces(&mstg, filename, (unpackdata == Py_True), &offset, segment_size);
+    Py_END_ALLOW_THREADS
+
     if (retcode < 0) {
         PyErr_Format(st->error, "Cannot read file '%s': %s", filename, ms_errorstr(retcode));
-        Py_XDECREF(out_traces);
+        if (mstg != NULL) mst_freegroup (&mstg);
         return NULL;
     }
 
-    if (! mstg) {
+    if (mstg == NULL) {
         PyErr_SetString(st->error, "Error reading file");
-        Py_XDECREF(out_traces);
         return NULL;
     }
 
@@ -133,11 +151,17 @@ mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
         while (mst) {
             if (mst->datasamples == NULL) {
                 PyErr_SetString(st->error, "Error reading file - datasamples is NULL");
-                Py_XDECREF(out_traces);
+                mst_freegroup (&mstg);
                 return NULL;
             }
             mst = mst->next;
         }
+    }
+
+    out_traces = Py_BuildValue("[]");
+    if (out_traces == NULL) {
+        mst_freegroup(&mstg);
+        return NULL;
     }
 
     mst = mstg->traces;
@@ -176,15 +200,22 @@ mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
         }
 
         /* convert data to python tuple */
-        out_trace = Py_BuildValue("(c,s,s,s,s,L,L,d,N,d,O)",
+        out_trace = Py_BuildValue("(c,s,s,s,s,L,L,d,N,L,O)",
                                   mst->dataquality, mst->network, mst->station, mst->location, mst->channel,
                                   mst->starttime, mst->endtime, mst->samprate, array,
-                                  offset, retcode == MS_ENDOFFILE ? Py_True : Py_False);
+                                  (long long)offset, (retcode == MS_ENDOFFILE) ? Py_True : Py_False);
+
+        if (out_trace == NULL) {
+            Py_XDECREF(out_traces);
+            mst_freegroup (&mstg);
+            return NULL;
+        }
         
         PyList_Append(out_traces, out_trace);
-        Py_DECREF(out_trace);
+        Py_XDECREF(out_trace);
         mst = mst->next;
     }
+
 
     mst_freegroup (&mstg);
     return out_traces;

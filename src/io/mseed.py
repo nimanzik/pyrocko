@@ -24,12 +24,13 @@ class CodeTooLong(FileSaveError):
     pass
 
 
-def iload(filename, load_data=True, offset=0, segment_size=0):
+def iload(filename, load_data=True, offset=0, segment_size=0, nsegments=0):
     from pyrocko import mseed_ext
 
     have_zero_rate_traces = False
     try:
-        while True:
+        isegment = 0
+        while isegment < nsegments or nsegments == 0:
             tr_tuples = mseed_ext.get_traces(
                 filename, load_data, offset, segment_size)
 
@@ -63,6 +64,9 @@ def iload(filename, load_data=True, offset=0, segment_size=0):
 
             if tr_tuple[10]:
                 break
+
+            offset = tr_tuple[9]
+            isegment += 1
 
     except (OSError, mseed_ext.MSeedError) as e:
         raise FileLoadError(str(e)+' (file: %s)' % filename)

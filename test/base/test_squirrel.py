@@ -71,7 +71,7 @@ class SquirrelTestCase(unittest.TestCase):
             for nut in squirrel.iload(fpath, content=[]):
                 ii += 1
 
-        assert ii == 400
+        assert ii == 401
 
         ii = 0
         database = squirrel.Database()
@@ -80,7 +80,7 @@ class SquirrelTestCase(unittest.TestCase):
             for nut in squirrel.iload(fpath, content=[], database=database):
                 ii += 1
 
-        assert ii == 400
+        assert ii == 401
 
         ii = 0
         for (fn, _) in SquirrelTestCase.test_files:
@@ -94,7 +94,7 @@ class SquirrelTestCase(unittest.TestCase):
             for nut in squirrel.iload(fpath, database=database):
                 ii += 1
 
-        assert ii == 400
+        assert ii == 401
 
         fpaths = [
             common.test_data_file(fn)
@@ -104,7 +104,7 @@ class SquirrelTestCase(unittest.TestCase):
         for nut in squirrel.iload(fpaths, content=[], database=database):
             ii += 1
 
-        assert ii == 400
+        assert ii == 401
 
         fpath = op.join(self.tempdir, 'emptyfile')
         with open(fpath, 'wb'):

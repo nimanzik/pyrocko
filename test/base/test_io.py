@@ -206,7 +206,8 @@ class IOTestCase(unittest.TestCase):
             trs = [tr for tr in iload(
                     f.name,
                     offset=512,
-                    segment_size=512)]
+                    segment_size=512,
+                    nsegments=1)]
             assert len(trs) == 1
             assert trs[0].tmin != 0.
 
