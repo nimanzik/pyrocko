@@ -276,9 +276,13 @@ static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
     if (memcpy(mst->datasamples, PyArray_DATA(contiguous_array), length*PyArray_ITEMSIZE(contiguous_array)) == NULL) {
         Py_DECREF(contiguous_array);
         PyErr_SetString(PyExc_MemoryError, "Could not copy memory.");
+        if (numpytype == NPY_INT16)
+            PyArray_XDECREF((PyArrayObject*) array);
         return EXIT_FAILURE;
     }
 
+    if (numpytype == NPY_INT16)
+        PyArray_XDECREF((PyArrayObject*) array);
     Py_DECREF(contiguous_array);
     return EXIT_SUCCESS;
 }
