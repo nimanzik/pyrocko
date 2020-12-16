@@ -34,12 +34,13 @@ static struct module_state _state;
  * and further description of arguments.
  *********************************************************************/
 static int
-pyrocko_ms_readtraces (MSTraceGroup **ppmstg, const char *msfile, flag dataflag, int segment, int segment_nrecords)
+pyrocko_ms_readtraces (MSTraceGroup **ppmstg, const char *msfile, flag dataflag, off_t* offset, off_t segment_size)
 {
   MSRecord *msr     = NULL;
   MSFileParam *msfp = NULL;
   int retcode;
   int reclen_detected = 0;
+  size_t segment_nrecords;
   off_t fpos = 0;
 
   if (!ppmstg)
@@ -55,29 +56,22 @@ pyrocko_ms_readtraces (MSTraceGroup **ppmstg, const char *msfile, flag dataflag,
     }
   }
 
+  if (offset > 0)
+    fpos = -1 * (*offset);
+
+  fprintf(stderr, "%d %d\n", offset, segment_size);
+
   /* Loop over the input file */
-  while ((retcode = ms_readmsr_main (&msfp, &msr, msfile, 0, fpos ? &fpos : NULL, NULL,
-                                     1, dataflag, NULL, 0)) == MS_NOERROR)
+  while ((retcode = ms_readmsr_main(&msfp, &msr, msfile, 0, fpos ? &fpos : NULL, NULL,
+                                    1, dataflag, NULL, 0)) == MS_NOERROR)
   {
     /* Add to trace group */
-
-    if ((segment >= 0) && (reclen_detected == 0)) {
-        reclen_detected = msr->reclen;
-        fpos = -reclen_detected * segment_nrecords * segment;
-
-        if ((-1 * fpos) >= msfp->filesize) {
-            retcode = MS_ENDOFFILE;
-            break;
-        }
-
-        ms_readmsr_main (&msfp, &msr, NULL, 0, NULL, NULL, 0, 0, NULL, 0);
-        continue;
-    }
     mst_addmsrtogroup (*ppmstg, msr, 0, -1., -1.);
 
-    if ((segment >= 0) && (msfp->recordcount >= segment_nrecords))
+    if ((segment_size > 0) && ((fpos - *offset) > segment_size)) {
+        *offset = fpos;
         break;
-
+    }
   }
 
   ms_readmsr_main (&msfp, &msr, NULL, 0, NULL, NULL, 0, 0, NULL, 0);
@@ -98,29 +92,29 @@ mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
     int           numpytype;
     PyObject      *unpackdata = NULL;
 
-    int           segment = -1;
-    int           segment_nrecords = 512;
+    off_t         offset = 0;
+    int           segment_size = 0;
 
     struct module_state *st = GETSTATE(m);
     (void) m;
 
-    static char *kwlist[] = {"filename", "dataflag", "segment", "segment_nrecords", NULL};
+    static char *kwlist[] = {"filename", "dataflag", "offset", "segment_size", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|Oii", kwlist, &filename, &unpackdata, &segment, &segment_nrecords))
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|Oii", kwlist, &filename, &unpackdata, &offset, &segment_size))
         return NULL;
 
     if (!PyBool_Check(unpackdata)) {
         PyErr_SetString(st->error, "dataflag argument must be a boolean");
         return NULL;
     }
-    if (segment_nrecords <= 0) {
-        PyErr_SetString(st->error, "segment_nrecords must be positive");
+    if (segment_size <= 0) {
+        PyErr_SetString(st->error, "segment_size must be positive");
         return NULL;
     }
 
     out_traces = Py_BuildValue("[]");
     /* get data from mseed file */
-    retcode = pyrocko_ms_readtraces(&mstg, filename, (unpackdata == Py_True), segment, segment_nrecords);
+    retcode = pyrocko_ms_readtraces(&mstg, filename, (unpackdata == Py_True), &offset, segment_size);
     if (retcode < 0) {
         PyErr_Format(st->error, "Cannot read file '%s': %s", filename, ms_errorstr(retcode));
         Py_XDECREF(out_traces);
@@ -182,9 +176,10 @@ mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
         }
 
         /* convert data to python tuple */
-        out_trace = Py_BuildValue("(c,s,s,s,s,L,L,d,N,d)",
+        out_trace = Py_BuildValue("(c,s,s,s,s,L,L,d,N,d,O)",
                                   mst->dataquality, mst->network, mst->station, mst->location, mst->channel,
-                                  mst->starttime, mst->endtime, mst->samprate, array, segment);
+                                  mst->starttime, mst->endtime, mst->samprate, array,
+                                  offset, retcode == MS_ENDOFFILE ? Py_True : Py_False);
         
         PyList_Append(out_traces, out_trace);
         Py_DECREF(out_trace);
@@ -263,7 +258,7 @@ static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
             *msdetype = DE_FLOAT64;
             break;
         default:
-            PyErr_SetString(PyExc_ValueError, "Data must be of type float64, float32, int32. int16 or int8.");
+            PyErr_SetString(PyExc_ValueError, "Data must be of type float64, float32, int32, int16 or int8.");
             return EXIT_FAILURE;
         }
     contiguous_array = PyArray_GETCONTIGUOUS((PyArrayObject*) array);

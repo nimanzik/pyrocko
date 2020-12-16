@@ -180,7 +180,7 @@ class IOTestCase(unittest.TestCase):
         num.testing.assert_equal(
             tr_load.ydata, num.concatenate([tr1.ydata, tr2.ydata]))
 
-    def testMSeedSegmented(self):
+    def testMSeedOffset(self):
         from pyrocko.io.mseed import iload
         c = '12'
         nsample = 500
@@ -197,14 +197,7 @@ class IOTestCase(unittest.TestCase):
         with tempfile.NamedTemporaryFile('wb') as f:
             io.save([tr1], f.name, record_length=512)
 
-            segment = 0
-            trs = []
-            while True:
-                tr = tuple(iload(f.name, segment=segment, segment_nrecords=1))
-                if not tr:
-                    break
-                trs.extend(tr)
-                segment += 1
+            trs = tuple(iload(f.name, offset=0, segment_size=512))
 
             trs_nsamples = sum(tr.ydata.size for tr in trs)
             assert nsample == trs_nsamples
@@ -212,8 +205,8 @@ class IOTestCase(unittest.TestCase):
 
             trs = [tr for tr in iload(
                     f.name,
-                    segment=1,
-                    segment_nrecords=1)]
+                    offset=512,
+                    segment_size=512)]
             assert len(trs) == 1
             assert trs[0].tmin != 0.
 

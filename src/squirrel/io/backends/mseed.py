@@ -8,7 +8,7 @@ from __future__ import absolute_import, print_function
 from pyrocko.io.io_common import get_stats, touch  # noqa
 from ... import model
 
-SEGMENT_NRECORDS = 512
+SEGMENT_SIZE = 1024*100
 
 
 def provided_formats():
@@ -29,38 +29,31 @@ def iload(format, file_path, segment, content):
     from pyrocko import mseed
 
     load_data = 'waveform' in content
-    load_segment = True
 
     if segment is None:
-        segment = 0
-        load_segment = False
+        offset = 0
+    else:
+        offset = segment
+        print('requested segment: %d' % segment)
 
-    ntr = 1  # Accessing the while loop
-    while ntr:
-        ntr = 0
-        for itr, tr in enumerate(mseed.iload(
-                file_path, load_data=load_data,
-                segment=segment, segment_nrecords=SEGMENT_NRECORDS)):
-            ntr += 1
+    for itr, tr in enumerate(mseed.iload(
+            file_path, load_data=load_data,
+            offset=offset, segment_size=SEGMENT_SIZE)):
 
-            nsamples = int(round((tr.tmax - tr.tmin) / tr.deltat)) + 1
-            nut = model.make_waveform_nut(
-                file_segment=segment,
-                file_element=itr,
-                agency='',
-                network=tr.network,
-                station=tr.station,
-                location=tr.location,
-                channel=tr.channel,
-                tmin=tr.tmin,
-                tmax=tr.tmin + tr.deltat * nsamples,
-                deltat=tr.deltat)
+        nsamples = int(round((tr.tmax - tr.tmin) / tr.deltat)) + 1
+        nut = model.make_waveform_nut(
+            file_segment=tr.meta['offset'],
+            file_element=itr,
+            agency='',
+            network=tr.network,
+            station=tr.station,
+            location=tr.location,
+            channel=tr.channel,
+            tmin=tr.tmin,
+            tmax=tr.tmin + tr.deltat * nsamples,
+            deltat=tr.deltat)
 
-            if 'waveform' in content:
-                nut.content = tr
+        if 'waveform' in content:
+            nut.content = tr
 
-            yield nut
-
-        if load_segment:
-            return
-        segment += 1
+        yield nut

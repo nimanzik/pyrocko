@@ -24,34 +24,45 @@ class CodeTooLong(FileSaveError):
     pass
 
 
-def iload(filename, load_data=True, segment=-1, segment_nrecords=512):
+def iload(filename, load_data=True, offset=0, segment_size=0):
     from pyrocko import mseed_ext
 
     have_zero_rate_traces = False
     try:
-        traces = []
-        segments = []
-        for tr in mseed_ext.get_traces(
-                filename, load_data, segment, segment_nrecords):
-            network, station, location, channel = tr[1:5]
-            tmin = float(tr[5])/float(mseed_ext.HPTMODULUS)
-            tmax = float(tr[6])/float(mseed_ext.HPTMODULUS)
-            try:
-                deltat = reuse(1.0/float(tr[7]))
-            except ZeroDivisionError:
-                have_zero_rate_traces = True
-                continue
+        while True:
+            tr_tuples = mseed_ext.get_traces(
+                filename, load_data, offset, segment_size)
 
-            ydata = tr[8]
+            if not tr_tuples:
+                break
 
-            traces.append(trace.Trace(
-                network, station, location, channel, tmin, tmax,
-                deltat, ydata))
+            for tr_tuple in tr_tuples:
+                network, station, location, channel = tr_tuple[1:5]
+                tmin = float(tr_tuple[5])/float(mseed_ext.HPTMODULUS)
+                tmax = float(tr_tuple[6])/float(mseed_ext.HPTMODULUS)
+                try:
+                    deltat = reuse(1.0/float(tr_tuple[7]))
+                except ZeroDivisionError:
+                    have_zero_rate_traces = True
+                    continue
 
-            segments.append(tr[9])
+                ydata = tr_tuple[8]
 
-        for tr in traces:
-            yield tr
+                tr = trace.Trace(
+                    network, station, location, channel, tmin, tmax,
+                    deltat, ydata)
+
+                tr.meta = {
+                    'offset_start': offset,
+                    'offset_end': tr_tuple[9],
+                    'last': tr_tuple[10],
+                    'segment_size': segment_size
+                }
+
+                yield tr
+
+            if tr_tuple[10]:
+                break
 
     except (OSError, mseed_ext.MSeedError) as e:
         raise FileLoadError(str(e)+' (file: %s)' % filename)
