@@ -583,9 +583,25 @@ class Trace(Object):
 
         return obj
 
-    def downsample(self, ndecimate, snap=False, initials=None, demean=False):
+    def downsample(self, ndecimate, snap=False, initials=None, demean=False,
+                   ftype='fir-remez'):
         '''
         Downsample trace by a given integer factor.
+
+        Antialiasing filter details:
+
+        * ``iir``: A Chebyshev type I digital filter of order 8 with maximum
+          ripple of 0.05 dB in the passband.
+        * ``fir``: A FIR filter using a Hamming window and 31 taps and a
+          well-behaved phase response.
+        * ``fir-remez``: A FIR filter based on the Remez exchange algorithm
+          with ``45*ndecimate`` taps and a cutoff at 75% Nyquist frequency.
+
+        Comparison of the digital filters:
+
+        .. figure :: ../../static/downsampling-filter-comparison.png
+            :width: 60%
+            :alt: Comparison of the downsampling filters.
 
         :param ndecimate: decimation factor, avoid values larger than 8
         :param snap: whether to put the new sampling instances closest to
@@ -595,8 +611,9 @@ class Trace(Object):
             two cases the final state of the filter is returned instead of
             ``None``.
         :param demean: whether to demean the signal before filtering.
+        :param ftype: which FIR filter to use, choose from
+            ``iir, fir, fir-remez``. Default is ``fir-remez``.
         '''
-
         newdeltat = self.deltat*ndecimate
         if snap:
             ilag = int(round(
@@ -616,7 +633,7 @@ class Trace(Object):
 
         if data.size != 0:
             result = util.decimate(
-                data, ndecimate, ftype='fir', zi=initials, ioff=ilag)
+                data, ndecimate, ftype=ftype, zi=initials, ioff=ilag)
         else:
             result = data
 
@@ -632,19 +649,32 @@ class Trace(Object):
         return finals
 
     def downsample_to(self, deltat, snap=False, allow_upsample_max=1,
-                      initials=None, demean=False):
+                      initials=None, demean=False, ftype='fir-remez'):
 
         '''
         Downsample to given sampling rate.
 
         Tries to downsample the trace to a target sampling interval of
         ``deltat``. This runs the :py:meth:`Trace.downsample` one or several
-        times. If allow_upsample_max is set to a value larger than 1,
+        times. If ``allow_upsample_max`` is set to a value larger than 1,
         intermediate upsampling steps are allowed, in order to increase the
         number of possible downsampling ratios.
 
         If the requested ratio is not supported, an exception of type
         :py:exc:`pyrocko.util.UnavailableDecimation` is raised.
+
+        :param deltat: desired sampling interval in [s]
+        :param allow_upsample_max: maximum upsampling of the signal to achieve
+            the desired deltat. Default is ``1``.
+        :param snap: whether to put the new sampling instances closest to
+            multiples of the sampling rate.
+        :param initials: ``None``, ``True``, or initial conditions for the
+            anti-aliasing filter, obtained from a previous run. In the latter
+            two cases the final state of the filter is returned instead of
+            ``None``.
+        :param demean: whether to demean the signal before filtering.
+        :param ftype: which FIR filter to use, choose from
+            ``iir, fir, fir-remez``. Default is ``fir-remez``.
         '''
 
         ratio = deltat/self.deltat
@@ -685,7 +715,8 @@ class Trace(Object):
                 if initials is not None:
                     xinitials = initials[i]
                 finals.append(self.downsample(
-                    ndecimate, snap=snap, initials=xinitials, demean=demean))
+                    ndecimate, snap=snap, initials=xinitials, demean=demean,
+                    ftype=ftype))
 
         if initials is not None:
             return finals
