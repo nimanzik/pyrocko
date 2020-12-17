@@ -602,9 +602,13 @@ class Trace(Content):
 
         return obj
 
-    def downsample(self, ndecimate, snap=False, initials=None, demean=False):
+    def downsample(self, ndecimate, snap=False, initials=None, demean=False,
+                   ftype='fir-remez'):
         '''
         Downsample trace by a given integer factor.
+
+        Comparison of the available FIR filters `fir` and `fir-remez`:
+
 
         :param ndecimate: decimation factor, avoid values larger than 8
         :param snap: whether to put the new sampling instances closest to
@@ -614,8 +618,9 @@ class Trace(Content):
             two cases the final state of the filter is returned instead of
             ``None``.
         :param demean: whether to demean the signal before filtering.
+        :param ftype: which FIR filter to use, choose from `fir, fir-remez`.
+            Default is `fir-remez`.
         '''
-
         newdeltat = self.deltat*ndecimate
         if snap:
             ilag = int(round(
@@ -635,7 +640,7 @@ class Trace(Content):
 
         if data.size != 0:
             result = util.decimate(
-                data, ndecimate, ftype='fir', zi=initials, ioff=ilag)
+                data, ndecimate, ftype=ftype, zi=initials, ioff=ilag)
         else:
             result = data
 
@@ -651,7 +656,7 @@ class Trace(Content):
         return finals
 
     def downsample_to(self, deltat, snap=False, allow_upsample_max=1,
-                      initials=None, demean=False):
+                      initials=None, demean=False, ftype='fir-remez'):
 
         '''
         Downsample to given sampling rate.
@@ -664,6 +669,19 @@ class Trace(Content):
 
         If the requested ratio is not supported, an exception of type
         :py:exc:`pyrocko.util.UnavailableDecimation` is raised.
+
+        :param deltat: desired deltat in [s]
+        :param allow_upsample_max: maximum upsampling of the signal to archive
+            the desired deltat. Default is `1`.
+        :param snap: whether to put the new sampling instances closest to
+            multiples of the sampling rate.
+        :param initials: ``None``, ``True``, or initial conditions for the
+            anti-aliasing filter, obtained from a previous run. In the latter
+            two cases the final state of the filter is returned instead of
+            ``None``.
+        :param demean: whether to demean the signal before filtering.
+        :param ftype: which FIR filter to use, choose from `fir, fir-remez`.
+            Default is `fir-remez`.
         '''
 
         ratio = deltat/self.deltat
@@ -704,7 +722,8 @@ class Trace(Content):
                 if initials is not None:
                     xinitials = initials[i]
                 finals.append(self.downsample(
-                    ndecimate, snap=snap, initials=xinitials, demean=demean))
+                    ndecimate, snap=snap, initials=xinitials, demean=demean,
+                    ftype=ftype))
 
         if initials is not None:
             return finals
