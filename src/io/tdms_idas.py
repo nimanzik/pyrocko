@@ -61,7 +61,7 @@ def iload(filename, load_data=True):
                 extra=extra_str)
 
             if load_data:
-                tr.set_ydata(channel[:].astype(num.int32))
+                tr.set_ydata(channel[:])
 
             yield tr
 
