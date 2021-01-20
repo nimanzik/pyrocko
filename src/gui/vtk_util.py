@@ -13,6 +13,7 @@ from vtk.util.numpy_support import \
     numpy_to_vtk as numpy_to_vtk_, get_vtk_array_type
 
 from pyrocko import geometry, cake
+from pyrocko.color import Color
 
 logger = logging.getLogger('pyrocko.gui.vtk_util')
 
@@ -224,10 +225,6 @@ class TrimeshPipe(object):
         act.SetMapper(mapper)
         prop = act.GetProperty()
         self.prop = prop
-        prop.SetColor(0.5, 0.5, 0.5)
-        prop.SetAmbientColor(0.3, 0.3, 0.3)
-        prop.SetDiffuseColor(0.5, 0.5, 0.5)
-        prop.SetSpecularColor(1.0, 1.0, 1.0)
         prop.BackfaceCullingOn()
         # solves probs at sphere horizon but disables seeing topo from below.
 
@@ -235,6 +232,8 @@ class TrimeshPipe(object):
         # prop.SetInterpolationToGouraud()
         self._shading = None
         self.set_shading('phong')
+        self._color = None
+        self.set_color(Color('aluminium3'))
 
         self.polydata = pd
         self.mapper = mapper
@@ -251,6 +250,11 @@ class TrimeshPipe(object):
 
         if lut is not None:
             self.set_lookuptable(lut)
+
+    def set_color(self, color):
+        if self._color is None or color != self._color:
+            self.prop.SetColor(*color.rgb)
+            self._color = color
 
     def set_shading(self, shading):
         if self._shading is None or self._shading != shading:
