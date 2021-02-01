@@ -2051,7 +2051,7 @@ class Squirrel(Selection):
             List of code patterns to query.
         :param limit:
             Limit query to return only up to a given maximum number of entries
-            per matching channel (without setting this option, very gappy data 
+            per matching channel (without setting this option, very gappy data
             could cause the query to execute for a very long time).
 
         :returns: list of entries of the form
