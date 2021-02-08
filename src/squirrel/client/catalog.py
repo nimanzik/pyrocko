@@ -56,12 +56,12 @@ def get_catalog(name):
 
 class CatalogSource(Source):
     '''
-    Squirrel source to access online earthquake catalogs.
+    Squirrel data-source to transparently access online earthquake catalogs.
 
     The catalog source maintains and synchronizes a partial copy of the online
     catalog, e.g. of all events above a certain magnitude. The time span for
     which the local copy of the catalog should be up-to date is maintained
-    automatically be Squirrel and data is loaded and updated in chunks as
+    automatically be Squirrel. Data is loaded and updated in chunks as
     needed in a just-in-time fashion. Data validity can optionally expire after
     a given period of time and new data can be treated to be preliminary.
     In both cases information will be refreshed as needed.

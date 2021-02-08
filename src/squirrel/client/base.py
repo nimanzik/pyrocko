@@ -52,6 +52,18 @@ class Constraint(Object):
 
 class Source(Object):
 
+    '''
+    Base class for Squirrel data-sources.
+
+    Data-sources can be attached to a Squirrel instance to allow transparent
+    access to remote resources, e.g. through FDSN web services
+    (:py:class:`~pyrocko.squirrel.client.fdsn.FDSNSource`) or online event
+    catalogs (:py:class:`~pyrocko.client.catalog.CatalogSource`).
+
+    Derived classes implement the details of querying, caching, updating and
+    bookkeeping of the accessed data.
+    '''
+
     def update_channel_inventory(self, squirrel, constraint):
         '''
         Let local inventory be up-to-date with remote for a given constraint.

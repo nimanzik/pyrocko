@@ -202,7 +202,7 @@ class ErrorLog(Object):
 class FDSNSource(Source):
 
     '''
-    Squirrel source to access data through an FDSN web service.
+    Squirrel data-source to transparently get data from FDSN web services.
     '''
 
     site = String.T()
