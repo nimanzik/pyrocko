@@ -195,11 +195,11 @@ class Selection(object):
     :type persistent:
         :py:class:`str`
 
-    In the Squirrel framework, a selection is conceptually a list of files to
-    be made available in the application. Instead of using
-    :py:class:`Selection` directly, user applications should usually use its
-    subclass :py:class:`Squirrel` which adds content indices to the selection
-    and provides high level data querying.
+    A selection in this context represents the list of files to be made
+    available to the application. Instead of using :py:class:`Selection`
+    directly, user applications should usually use its subclass
+    :py:class:`Squirrel` which adds content indices to the selection and
+    provides high level data querying.
 
     By default, a temporary table in the database is created to hold the names
     of the files in the selection. This table is only visible inside the
@@ -211,7 +211,7 @@ class Selection(object):
     indications are stored in the selection's database table to make the user
     choice regarding these options persistent on a per-file basis. Book-keeping
     on whether files are unknown, known or if modification checks are forced is
-    also handled in the selection's file-state table.
+    handled in the selection's file-state table.
 
     Paths of files can be added to the selection using the :py:meth:`add`
     method and removed with :py:meth:`remove`. :py:meth:`undig_grouped` can be
@@ -494,15 +494,17 @@ class Selection(object):
         '''
         Get inventory of cached content for all files in the selection.
 
-        :param:
-            skip_unchanged: if ``True`` only inventory of modified files is
+        :param skip_unchanged:
+            If ``True`` only inventory of modified files is
             yielded (:py:meth:`flag_modified` must be called beforehand).
+        :type skip_unchanged:
+            bool
 
         This generator yields tuples ``((format, path), nuts)`` where ``path``
         is the path to the file, ``format`` is the format assignation or
         ``'detect'`` and ``nuts`` is a list of
-        :py:class:`~pyrocko.squirrel.Nut` objects representing the contents of
-        the file.
+        :py:class:`~pyrocko.squirrel.model.Nut` objects representing the
+        contents of the file.
         '''
 
         if skip_unchanged:
@@ -727,7 +729,8 @@ class Squirrel(Selection):
         directory is found, the user's global Squirrel environment
         ``'$HOME/.pyrocko/squirrel'`` is used.
     :type env:
-        :py:class:`SquirrelEnvironment` or :py:class:`str`
+        :py:class:`~pyrocko.squirrel.environment.SquirrelEnvironment` or
+        :py:class:`str`
     :param database:
         Database instance or path to database. By default the
         database found in the detected Squirrel environment is used.
@@ -743,40 +746,28 @@ class Squirrel(Selection):
     :type persistent:
         :py:class:`str`
 
-    Provides a unified interface to query seismic waveforms, station and sensor
-    metadata, and event information from local file collections and remote data
-    sources. Query results are promptly returned, even for very large
-    collections, thanks to a highly optimized database setup working behind the
-    scenes. Assemblage of a data selection is very fast for known files as all
-    content indices are cached in a database. Unknown files are automatically
-    indexed when added to the selection.
+    This is the central class of the Squirrel framework. It provides a unified
+    interface to query and access seismic waveforms, station meta-data and
+    event information from local file collections and remote data sources. For
+    prompt responses, a profound database setup is used under the hood. To
+    speed up assemblage of ad-hoc data selections, files are indexed on first
+    use and the extracted meta-data is remembered in the database for
+    subsequent accesses. Bulk data is lazily loaded from disk and remote
+    sources, just when requested. Once loaded, data is cached in memory to
+    expedite typical access patterns. Files and data sources can be dynamically
+    added to and removed from the Squirrel selection at runtime.
 
-    Features
-
-    - Efficient[1] lookup of data relevant for a selected time window.
-    - Metadata caching and indexing.
-    - Modified files are re-indexed as needed.
-    - SQL database (sqlite) is used behind the scenes.
-    - Can handle selections with millions of files.
-    - Data can be added and removed at run-time, efficiently[1].
-    - Just-in-time download of missing data.
-    - Disk-cache of meta-data query results with expiration time.
-    - Efficient event catalog synchronization.
-    - Always-up-to-date data coverage indices.
-    - Always-up-to-date indices of available station/channel codes.
-
-    [1] O log N performance, where N is the number of data entities (nuts).
-
-    Queries are restricted to the contents offered by the files which have
-    been added to the Squirrel (which usually is a subset of the information
-    collected in the attached global file meta-information database).
-
-    By default, temporary tables are created in the attached database to hold
-    the names of the files in the selection as well as various indices and
-    counters. These tables are only visible inside the application which
-    created it. If a name is given to ``persistent``, a named selection is
-    created, which is visible also in other applications using the same
-    database.
+    Queries are restricted to the contents of the files currently added to the
+    Squirrel selection (usually a subset of the information collected in the
+    attached global file meta-information database). This list of files is
+    referred to here as the "selection". By default, temporary tables are
+    created in the attached database to hold the names of the files in the
+    selection as well as various indices and counters. These tables are only
+    visible inside the application which created it and are deleted when the
+    database connection is closed or the application exits. To create a
+    selection which is not deleted at exit, supply a name to the ``persistent``
+    argument of the Squirrel constructor. Persistent selections are shared
+    among applications using the same database.
 
     Paths of files can be added to the selection using the
     :py:meth:`add` method.
@@ -1100,7 +1091,7 @@ class Squirrel(Selection):
         :param nuts:
             Content pieces to be added.
         :type nuts:
-            iterator yielding :py:class:`~pyrocko.squirrel.Nut` objects
+            iterator yielding :py:class:`~pyrocko.squirrel.model.Nut` objects
 
         :param virtual_paths:
             List of virtual paths to prevent creating a temporary list of the
@@ -1170,7 +1161,7 @@ class Squirrel(Selection):
         :param source:
             Remote data access client instance.
         :type source:
-           subclass of :py:class:`~pyrocko.squirrel.Source`
+           subclass of :py:class:`~pyrocko.squirrel.client.Source`
         '''
 
         self._sources.append(source)
@@ -1180,7 +1171,8 @@ class Squirrel(Selection):
         '''
         Add FDSN site for transparent remote data access.
 
-        Arguments are passed to :py:class:`~pyrocko.squirrel.FDSNSource`.
+        Arguments are passed to
+        :py:class:`~pyrocko.squirrel.client.fdsn.FDSNSource`.
         '''
 
         self.add_source(fdsn.FDSNSource(*args, **kwargs))
@@ -1189,7 +1181,8 @@ class Squirrel(Selection):
         '''
         Add online catalog for transparent event data access.
 
-        Arguments are passed to :py:class:`~pyrocko.squirrel.CatalogSource`.
+        Arguments are passed to
+        :py:class:`~pyrocko.squirrel.client.catalog.CatalogSource`.
         '''
 
         self.add_source(catalog.CatalogSource(*args, **kwargs))
@@ -1243,7 +1236,7 @@ class Squirrel(Selection):
             timestamp
 
         :param codes:
-            Pattern of content codes to be matched.
+            Pattern of content codes to query.
         :type codes:
             :py:class:`tuple` of :py:class:`str`
 
@@ -1260,7 +1253,7 @@ class Squirrel(Selection):
         Complexity: O(log N) for the time selection part due to heavy use of
         database indices.
 
-        Yields :py:class:`~pyrocko.squirrel.Nut` objects representing the
+        Yields :py:class:`~pyrocko.squirrel.model.Nut` objects representing the
         intersecting content.
 
         Query time span is treated as a half-open interval ``[tmin, tmax)``.
@@ -1524,7 +1517,7 @@ class Squirrel(Selection):
         '''
         Get time interval over all content in selection.
 
-        Complexity O(1), independent of the number of nuts.
+        Complexity: O(1), independent of the number of nuts.
 
         :returns: (tmin, tmax)
         '''
@@ -1603,7 +1596,7 @@ class Squirrel(Selection):
 
         :param codes: if given, get kinds only for selected codes identifier
 
-        Complexity: O(1), independent of number of nuts
+        Complexity: O(1), independent of number of nuts.
         '''
 
         return self._database._iter_kinds(
@@ -1618,7 +1611,7 @@ class Squirrel(Selection):
             type
         :type kind: :py:class:`str`
 
-        Complexity: O(1), independent of number of nuts
+        Complexity: O(1), independent of number of nuts.
         '''
         return self._database._iter_deltats(
             kind=kind,
@@ -1631,7 +1624,7 @@ class Squirrel(Selection):
         :param kind: if given, get codes only for a given content type
         :type kind: :py:class:`str`
 
-        Complexity: O(1), independent of number of nuts
+        Complexity: O(1), independent of number of nuts.
         '''
         return self._database._iter_codes(
             kind=kind,
@@ -1645,7 +1638,7 @@ class Squirrel(Selection):
 
         Yields tuples ``((kind, codes), count)``
 
-        Complexity: O(1), independent of number of nuts
+        Complexity: O(1), independent of number of nuts.
         '''
         return self._database._iter_counts(
             kind=kind,
@@ -1657,7 +1650,7 @@ class Squirrel(Selection):
 
         :param codes: if given, get kinds only for selected codes identifier
 
-        Complexity: O(1), independent of number of nuts
+        Complexity: O(1), independent of number of nuts.
 
         :returns: sorted list of available content types
         '''
@@ -1669,7 +1662,7 @@ class Squirrel(Selection):
 
         :param kind: if given, get codes only for selected content type
 
-        Complexity: O(1), independent of number of nuts
+        Complexity: O(1), independent of number of nuts.
 
         :returns: sorted list of available sampling intervals
         '''
@@ -1681,7 +1674,7 @@ class Squirrel(Selection):
 
         :param kind: if given, get codes only for selected content type
 
-        Complexity: O(1), independent of number of nuts
+        Complexity: O(1), independent of number of nuts.
 
         :returns: sorted list of available codes as tuples of strings
         '''
@@ -1693,9 +1686,9 @@ class Squirrel(Selection):
 
         :param kind: if given, get codes only for selected content type
 
-        Complexity: O(1), independent of number of nuts
+        Complexity: O(1), independent of number of nuts.
 
-        :returns: ``dict`` with ``counts[kind][codes] or ``counts[codes]``
+        :returns: ``dict`` with ``counts[kind][codes]`` or ``counts[codes]``
             if kind is not ``None``
         '''
         d = {}
@@ -1740,7 +1733,7 @@ class Squirrel(Selection):
         Update inventory of remote content for a given selection.
 
         This function triggers all attached remote sources, to check for
-        updates in the metadata. The sources will only submit queries when
+        updates in the meta-data. The sources will only submit queries when
         their expiration date has passed, or if the selection spans into
         previously unseen times or areas.
         '''
@@ -1861,6 +1854,41 @@ class Squirrel(Selection):
 
     def get_stations(
             self, obj=None, tmin=None, tmax=None, time=None, codes=None):
+
+        '''
+        Get stations matching given constraints.
+
+        :param obj:
+            Object providing ``tmin``, ``tmax`` and ``codes`` to be used to
+            constrain the query. Direct arguments override those from ``obj``.
+        :type obj:
+            Any object with attributes ``tmin``, ``tmax`` and ``codes``.
+
+        :param tmin:
+            Start time of query interval.
+        :type tmin:
+            timestamp
+
+        :param tmax:
+            End time of query interval.
+        :type tmax:
+            timestamp
+
+        :param time:
+            Time instant to query. Equivalent to setting ``tmin`` and ``tmax``
+            to the same value.
+        :type tmax:
+            timestamp
+
+        :param codes:
+            Pattern of content codes to query.
+        :type codes:
+            :py:class:`tuple` of :py:class:`str`
+
+        :returns: List of :py:class:`~pyrocko.squirrel.model.Station` objects.
+
+        See :py:meth:`Squirrel.iter_nuts` for details on time span matching.
+        '''
 
         args = self._get_selection_args(obj, tmin, tmax, time, codes)
         nuts = sorted(
