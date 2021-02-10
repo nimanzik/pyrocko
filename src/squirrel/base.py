@@ -447,7 +447,7 @@ class Selection(object):
         '''
         Iterate over all file paths currently belonging to the selection.
 
-        :returns: Iterator yielding file paths.
+        :yields: File paths.
         '''
 
         sql = self._sql('''
@@ -718,6 +718,42 @@ Time span of indexed contents: %s - %s''' % (
         return s
 
 
+doc_snippets = dict(
+    query_args='''
+        :param obj:
+            Object providing ``tmin``, ``tmax`` and ``codes`` to be used to
+            constrain the query. Direct arguments override those from ``obj``.
+        :type obj:
+            Any object with attributes ``tmin``, ``tmax`` and ``codes``.
+
+        :param tmin:
+            Start time of query interval.
+        :type tmin:
+            timestamp
+
+        :param tmax:
+            End time of query interval.
+        :type tmax:
+            timestamp
+
+        :param time:
+            Time instant to query. Equivalent to setting ``tmin`` and ``tmax``
+            to the same value.
+        :type time:
+            timestamp
+
+        :param codes:
+            Pattern of content codes to query.
+        :type codes:
+            :py:class:`tuple` of :py:class:`str`
+''')
+
+
+def filldocs(meth):
+    meth.__doc__ %= doc_snippets
+    return meth
+
+
 class Squirrel(Selection):
     '''
     Prompt, lazy, indexing, caching, dynamic seismological dataset access.
@@ -807,7 +843,6 @@ class Squirrel(Selection):
         Squirrel.get_coverage
         Squirrel.get_content
         Squirrel.get_stations
-        Squirrel.get_pyrocko_stations
         Squirrel.get_channels
         Squirrel.get_responses
         Squirrel.get_events
@@ -1101,7 +1136,8 @@ class Squirrel(Selection):
         :type format:
             :py:class:`str`
 
-        Complexity: O(log N)
+        :Complexity:
+            O(log N)
         '''
 
         if isinstance(kinds, str):
@@ -1316,11 +1352,13 @@ class Squirrel(Selection):
         :type kind_codes_ids:
             :py:class:`list` of :py:class:`str`
 
-        Complexity: O(log N) for the time selection part due to heavy use of
-        database indices.
+        :yields:
+            :py:class:`~pyrocko.squirrel.model.Nut` objects representing the
+            intersecting content.
 
-        Yields :py:class:`~pyrocko.squirrel.model.Nut` objects representing the
-        intersecting content.
+        :complexity:
+            O(log N) for the time selection part due to heavy use of database
+            indices.
 
         Query time span is treated as a half-open interval ``[tmin, tmax)``.
         However, if ``tmin`` equals ``tmax``, the edge logics are modified to
@@ -1583,7 +1621,8 @@ class Squirrel(Selection):
         '''
         Get time interval over all content in selection.
 
-        Complexity: O(1), independent of the number of nuts.
+        :complexity:
+            O(1), independent of the number of nuts.
 
         :returns: (tmin, tmax)
         '''
@@ -1664,7 +1703,11 @@ class Squirrel(Selection):
         :type codes:
             :py:class:`tuple` of :py:class:`str`
 
-        Complexity: O(1), independent of number of nuts.
+        :yields:
+            Available content kinds as :py:class:`str`.
+
+        :complexity:
+            O(1), independent of number of nuts.
         '''
 
         return self._database._iter_kinds(
@@ -1680,7 +1723,11 @@ class Squirrel(Selection):
         :type kind:
             str
 
-        Complexity: O(1), independent of number of nuts.
+        :yields:
+            :py:class:`float` values.
+
+        :complexity:
+            O(1), independent of number of nuts.
         '''
         return self._database._iter_deltats(
             kind=kind,
@@ -1695,7 +1742,11 @@ class Squirrel(Selection):
         :type kind:
             str
 
-        Complexity: O(1), independent of number of nuts.
+        :yields:
+            :py:class:`tuple` of :py:class:`str`
+
+        :complexity:
+            O(1), independent of number of nuts.
         '''
         return self._database._iter_codes(
             kind=kind,
@@ -1710,9 +1761,11 @@ class Squirrel(Selection):
         :type kind:
             str
 
-        Yields tuples ``((kind, codes), count)``
+        :yields:
+            Tuples of the form ``((kind, codes), count)``.
 
-        Complexity: O(1), independent of number of nuts.
+        :complexity:
+            O(1), independent of number of nuts.
         '''
         return self._database._iter_counts(
             kind=kind,
@@ -1727,9 +1780,12 @@ class Squirrel(Selection):
         :type codes:
             :py:class:`tuple` of :py:class:`str`
 
-        Complexity: O(1), independent of number of nuts.
+        :returns:
+            Sorted list of available content types.
 
-        :returns: sorted list of available content types
+        :complexity:
+            O(1), independent of number of nuts.
+
         '''
         return sorted(list(self.iter_kinds(codes=codes)))
 
@@ -1742,7 +1798,8 @@ class Squirrel(Selection):
         :type kind:
             str
 
-        Complexity: O(1), independent of number of nuts.
+        :complexity:
+            O(1), independent of number of nuts.
 
         :returns: sorted list of available sampling intervals
         '''
@@ -1757,7 +1814,8 @@ class Squirrel(Selection):
         :type kind:
             str
 
-        Complexity: O(1), independent of number of nuts.
+        :complexity:
+            O(1), independent of number of nuts.
 
         :returns: sorted list of available codes as tuples of strings
         '''
@@ -1772,7 +1830,8 @@ class Squirrel(Selection):
         :type kind:
             str
 
-        Complexity: O(1), independent of number of nuts.
+        :complexity:
+            O(1), independent of number of nuts.
 
         :returns: ``dict`` with ``counts[kind][codes]`` or ``counts[codes]``
             if kind is not ``None``
@@ -2036,52 +2095,57 @@ class Squirrel(Selection):
                     'Multiple entries matching codes %s'
                     % '.'.join(codes.split(separator)))
 
+    @filldocs
     def get_stations(
-            self, obj=None, tmin=None, tmax=None, time=None, codes=None):
+            self, obj=None, tmin=None, tmax=None, time=None, codes=None,
+            model='squirrel'):
 
         '''
         Get stations matching given constraints.
 
-        :param obj:
-            Object providing ``tmin``, ``tmax`` and ``codes`` to be used to
-            constrain the query. Direct arguments override those from ``obj``.
-        :type obj:
-            Any object with attributes ``tmin``, ``tmax`` and ``codes``.
+        %(query_args)s
 
-        :param tmin:
-            Start time of query interval.
-        :type tmin:
-            timestamp
+        :param model:
+            Select object model for returned values: ``'squirrel'`` to get
+            Squirrel station objects or ``'pyrocko'`` to get Pyrocko station
+            objects with channel information attached.
+        :type model:
+            str
 
-        :param tmax:
-            End time of query interval.
-        :type tmax:
-            timestamp
-
-        :param time:
-            Time instant to query. Equivalent to setting ``tmin`` and ``tmax``
-            to the same value.
-        :type tmax:
-            timestamp
-
-        :param codes:
-            Pattern of content codes to query.
-        :type codes:
-            :py:class:`tuple` of :py:class:`str`
-
-        :returns: List of :py:class:`~pyrocko.squirrel.model.Station` objects.
+        :returns:
+            List of :py:class:`pyrocko.squirrel.Station
+            <pyrocko.squirrel.model.Station>` objects by default or list of
+            :py:class:`pyrocko.model.Station <pyrocko.model.station.Station>`
+            objects if ``model='pyrocko'`` is requested.
 
         See :py:meth:`Squirrel.iter_nuts` for details on time span matching.
         '''
 
-        args = self._get_selection_args(obj, tmin, tmax, time, codes)
-        nuts = sorted(
-            self.iter_nuts('station', *args), key=lambda nut: nut.dkey)
-        self._check_duplicates(nuts)
-        return [self.get_content(nut) for nut in nuts]
+        if model == 'pyrocko':
+            return self._get_pyrocko_stations(obj, tmin, tmax, time, codes)
+        elif model == 'squirrel':
+            args = self._get_selection_args(obj, tmin, tmax, time, codes)
+            nuts = sorted(
+                self.iter_nuts('station', *args), key=lambda nut: nut.dkey)
+            self._check_duplicates(nuts)
+            return [self.get_content(nut) for nut in nuts]
+        else:
+            raise ValueError('Invalid station model: %s' % model)
 
+    @filldocs
     def get_channels(
             self, obj=None, tmin=None, tmax=None, time=None, codes=None):
+
+        '''
+        Get channels matching given constraints.
+
+        %(query_args)s
+
+        :returns:
+            List of :py:class:`~pyrocko.squirrel.model.Channel` objects.
+
+        See :py:meth:`Squirrel.iter_nuts` for details on time span matching.
+        '''
 
         args = self._get_selection_args(obj, tmin, tmax, time, codes)
         nuts = sorted(
@@ -2395,16 +2459,18 @@ class Squirrel(Selection):
 
         return chopped
 
-    def get_pyrocko_stations(self, *args, **kwargs):
+    def _get_pyrocko_stations(
+            self, obj=None, tmin=None, tmax=None, time=None, codes=None):
+
         from pyrocko import model as pmodel
 
         by_nsl = defaultdict(lambda: (list(), list()))
-        for station in self.get_stations(*args, **kwargs):
+        for station in self.get_stations(obj, tmin, tmax, time, codes):
             sargs = station._get_pyrocko_station_args()
             nsl = sargs[1:4]
             by_nsl[nsl][0].append(sargs)
 
-        for channel in self.get_channels(*args, **kwargs):
+        for channel in self.get_channels(obj, tmin, tmax, time, codes):
             sargs = channel._get_pyrocko_station_args()
             nsl = sargs[1:4]
             sargs_list, channels_list = by_nsl[nsl]
