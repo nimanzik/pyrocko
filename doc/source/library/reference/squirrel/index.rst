@@ -30,3 +30,4 @@ Features
    error <error>
    io <io/index>
    client <client/index>
+   dataset <dataset>
