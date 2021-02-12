@@ -193,7 +193,9 @@ mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
                     return NULL;
             }
             array = PyArray_SimpleNew(1, array_dims, numpytype);
+            Py_BEGIN_ALLOW_THREADS
             memcpy(PyArray_DATA((PyArrayObject*)array), mst->datasamples, mst->numsamples*ms_samplesize(mst->sampletype));
+            Py_END_ALLOW_THREADS
         } else {
             Py_INCREF(Py_None);
             array = Py_None;
@@ -227,6 +229,7 @@ static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
     char          *network, *station, *location, *channel, *dataquality;
     PyObject      *array = NULL;
     PyArrayObject *contiguous_array = NULL;
+    void          *ret;
 
     if (!PyTuple_Check(in_trace)) {
         PyErr_SetString(PyExc_ValueError, "Trace record must be a tuple of (network, station, location, channel, starttime, endtime, samprate, dataquality, data).");
@@ -298,8 +301,11 @@ static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
     mst->numsamples = length;
     mst->samplecnt = length;
 
+    Py_BEGIN_ALLOW_THREADS
     mst->datasamples = calloc(length, ms_samplesize(mst->sampletype));
-    if (memcpy(mst->datasamples, PyArray_DATA(contiguous_array), length*PyArray_ITEMSIZE(contiguous_array)) == NULL) {
+    ret = memcpy(mst->datasamples, PyArray_DATA(contiguous_array), length*PyArray_ITEMSIZE(contiguous_array));
+    Py_END_ALLOW_THREADS
+    if (ret == NULL) {
         Py_DECREF(contiguous_array);
         PyErr_SetString(PyExc_MemoryError, "Could not copy memory.");
         if (numpytype == NPY_INT16)
