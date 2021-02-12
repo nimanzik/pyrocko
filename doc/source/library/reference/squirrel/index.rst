@@ -31,3 +31,4 @@ Features
    io <io/index>
    client <client/index>
    dataset <dataset>
+   cache <cache>

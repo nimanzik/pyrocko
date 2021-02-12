@@ -119,6 +119,7 @@ class SquirrelEnvironment(Object):
 
     database_path = String.T(optional=True)
     cache_path = String.T(optional=True)
+    persistent = String.T(optional=True)
 
     @classmethod
     def make(cls, squirrel_path):
