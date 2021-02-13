@@ -234,11 +234,11 @@ class Selection(object):
     :type persistent:
         :py:class:`str`
 
-    A selection in this context represents the list of files to be made
-    available to the application. Instead of using :py:class:`Selection`
-    directly, user applications should usually use its subclass
-    :py:class:`Squirrel` which adds content indices to the selection and
-    provides high level data querying.
+    A selection in this context represents the list of files available to the
+    application. Instead of using :py:class:`Selection` directly, user
+    applications should usually use its subclass :py:class:`Squirrel` which
+    adds content indices to the selection and provides high level data
+    querying.
 
     By default, a temporary table in the database is created to hold the names
     of the files in the selection. This table is only visible inside the
@@ -825,48 +825,56 @@ class Squirrel(Selection):
     constructor. Persistent selections are shared among applications using the
     same database.
 
+    **Method summary**
+
+    Some of the methods are implemented in :py:class:`Squirrel`'s base class
+    :py:class:`Selection`.
+
     .. autosummary::
 
-        Squirrel.add
-        Squirrel.add_source
-        Squirrel.add_fdsn
-        Squirrel.add_catalog
-        Squirrel.add_dataset
-        Squirrel.add_virtual
-        Squirrel.update
-        Squirrel.update_waveform_promises
-        Squirrel.advance_accessor
-        Squirrel.clear_accessor
-        Squirrel.reload
-        Squirrel.iter_nuts
-        Squirrel.iter_kinds
-        Squirrel.iter_deltats
-        Squirrel.iter_codes
-        Squirrel.iter_counts
-        Squirrel.get_nuts
-        Squirrel.get_time_span
-        Squirrel.get_deltat_span
-        Squirrel.get_deltats
-        Squirrel.get_kinds
-        Squirrel.get_codes
-        Squirrel.get_counts
-        Squirrel.get_nfiles
-        Squirrel.get_nnuts
-        Squirrel.get_total_size
-        Squirrel.get_stats
-        Squirrel.get_content
-        Squirrel.get_stations
-        Squirrel.get_channels
-        Squirrel.get_responses
-        Squirrel.get_events
-        Squirrel.get_waveform_nuts
-        Squirrel.get_waveforms
-        Squirrel.chopper_waveforms
-        Squirrel.get_coverage
-        Squirrel.pile
-        Squirrel.snuffle
-        Squirrel.glob_codes
-        Squirrel.print_tables
+        ~Squirrel.add
+        ~Squirrel.add_source
+        ~Squirrel.add_fdsn
+        ~Squirrel.add_catalog
+        ~Squirrel.add_dataset
+        ~Squirrel.add_virtual
+        ~Squirrel.update
+        ~Squirrel.update_waveform_promises
+        ~Squirrel.advance_accessor
+        ~Squirrel.clear_accessor
+        ~Squirrel.reload
+        ~Selection.iter_paths
+        ~Squirrel.iter_nuts
+        ~Squirrel.iter_kinds
+        ~Squirrel.iter_deltats
+        ~Squirrel.iter_codes
+        ~Squirrel.iter_counts
+        ~Selection.get_paths
+        ~Squirrel.get_nuts
+        ~Squirrel.get_kinds
+        ~Squirrel.get_deltats
+        ~Squirrel.get_codes
+        ~Squirrel.get_counts
+        ~Squirrel.get_time_span
+        ~Squirrel.get_deltat_span
+        ~Squirrel.get_nfiles
+        ~Squirrel.get_nnuts
+        ~Squirrel.get_total_size
+        ~Squirrel.get_stats
+        ~Squirrel.get_content
+        ~Squirrel.get_stations
+        ~Squirrel.get_channels
+        ~Squirrel.get_responses
+        ~Squirrel.get_events
+        ~Squirrel.get_waveform_nuts
+        ~Squirrel.get_waveforms
+        ~Squirrel.chopper_waveforms
+        ~Squirrel.get_coverage
+        ~Squirrel.pile
+        ~Squirrel.snuffle
+        ~Squirrel.glob_codes
+        ~Selection.get_database
+        ~Squirrel.print_tables
     '''
 
     def __init__(
@@ -1272,7 +1280,7 @@ class Squirrel(Selection):
         :param source:
             Remote data access client instance.
         :type source:
-           subclass of :py:class:`~pyrocko.squirrel.client.Source`
+           subclass of :py:class:`~pyrocko.squirrel.client.base.Source`
         '''
 
         self._sources.append(source)

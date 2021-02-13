@@ -31,8 +31,9 @@ class LocalData(base.Source, has_paths.HasPaths):
     '''
     paths = List.T(
         has_paths.Path.T(),
-        help='Directory and file paths which are added to the Squirrel '
-             'instance. See :py:meth:`pyrocko.squirrel.base.Squirrel.add`.')
+        help='Directory and file paths to add to the Squirrel '
+             'instance. See :py:meth:`Squirrel.add() '
+             '<pyrocko.squirrel.base.Squirrel.add>`.')
     kinds = List.T(
         ContentKind.T(),
         optional=True,
