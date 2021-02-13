@@ -50,7 +50,7 @@ dataset description in :py:mod:`~pyrocko.squirrel.dataset`. A unified IO
 interface bridging to various Pyrocko modules outside of the Squirrel framework
 is available in :py:mod:`~pyrocko.squirrel.io`. Memory cache management is
 implemented in :py:mod:`~pyrocko.squirrel.cache`. Compatibility with Pyrocko's
-older the older waveform archive access module is implemented in
+older waveform archive access module is implemented in
 :py:mod:`~pyrocko.squirrel.pile`.
 
 **Submodules**
