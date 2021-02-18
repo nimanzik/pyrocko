@@ -55,8 +55,6 @@ class SlowSlink(object):
         else:
             cmd = ['slinktool',  '-L', self.host+':'+str(self.port)]
             logger.debug('Running %s' % ' '.join(cmd))
-            channels = ['BHZ', 'HHZ', 'BH1', 'BHN', 'HH1', 'HHN', 'BH2', 'BHE',
-                        'HH2', 'HHE']
             try:
                 slink = subprocess.Popen(cmd, stdout=subprocess.PIPE)
             except OSError as e:
@@ -67,14 +65,17 @@ class SlowSlink(object):
             for line in a.splitlines():
                 line = line.decode()
                 toks = line.split()
-                for cha in channels:
-                    net, sta, loc = toks[0], toks[1], ''
-                    streams.append((net, sta, loc, cha))
+                net, sta, loc = toks[0], toks[1], ''
+                streams.append((net, sta, loc, ''))
         return streams
 
     def add_stream(self, network, station, location, channel):
-        self.stream_selectors.append(
-            '%s_%s:%s.D' % (network, station, channel))
+        if channel is '':
+            self.stream_selectors.append(
+                '%s_%s' % (network, station))
+        else:
+            self.stream_selectors.append(
+                '%s_%s:%s.D' % (network, station, channel))
 
     def add_raw_stream_selector(self, stream_selector):
         self.stream_selectors.append(stream_selector)

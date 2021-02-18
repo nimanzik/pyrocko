@@ -171,7 +171,13 @@ def setup_acquisition_sources(args):
                     except slink.SlowSlinkError as e:
                         logger.fatal(str(e))
                         sys.exit(1)
-
+                    s_pat = msl.group(5).split('.')
+                    print(s_pat)
+                    if streams[0][-1] == '':
+                        for char in s_pat[-1]:
+                            stream_patterns = ['%s.%s.%s.' % (s_pat[0],
+                                                              s_pat[1],
+                                                              s_pat[2])]
                     streams = list(set(
                         util.match_nslcs(stream_patterns, streams)))
                     for stream in streams:
