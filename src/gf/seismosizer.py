@@ -1968,6 +1968,11 @@ class RectangularSource(SourceWithDerivedMagnitude):
         optional=True,
         help='Slip on the rectangular source area [m]')
 
+    opening_fraction = Float.T(
+        default=0.,
+        help='Determines fraction of slip related to opening.'
+             '(0 - pure shear, 1 - pure tensile)')
+
     decimation_factor = Int.T(
         optional=True,
         default=1,
@@ -2059,11 +2064,25 @@ class RectangularSource(SourceWithDerivedMagnitude):
                 points=points,
                 interpolation=interpolation)
 
-            amplitudes *= dl * dw * shear_moduli * self.slip
+            tensile_slip = self.slip * self.opening_fraction
+            shear_slip = self.slip - tensile_slip
+
+            amplitudes2 = shear_moduli * shear_slip * amplitudes * dl * dw
+
+            if self.opening_fraction > 0:
+                lambda_moduli = store.config.get_lambda_moduli(
+                    self.lat, self.lon,
+                    points=points,
+                    interpolation=interpolation)
+
+                amplitudes2 += (
+                    lambda_moduli + (2 / 3) * shear_moduli) * tensile_slip * \
+                    amplitudes * dl * dw
+
         else:
             # normalization to retain total moment
-            amplitudes /= num.sum(amplitudes)
-            amplitudes *= self.get_moment(store, target)
+            amplitudes2 = amplitudes / num.sum(amplitudes)
+            amplitudes2 *= self.get_moment(store, target)
 
         return points, times, amplitudes, dl, dw
 
@@ -2073,6 +2092,19 @@ class RectangularSource(SourceWithDerivedMagnitude):
 
         mot = pmt.MomentTensor(
             strike=self.strike, dip=self.dip, rake=self.rake)
+
+        if self.opening_fraction > 0:
+            # get horizontal tensile dislocation and rotate
+            rotmat1 = pmt.euler_to_matrix(
+                d2r * self.dip, d2r * self.strike, d2r * -self.rake)
+            hor_dike = pmt.symmat6([1., 1., 3., 0., 0., 0.])
+            m_dike = rotmat1.T * hor_dike * rotmat1
+
+            # add to shear dislocation and normalize moment again
+            m9 = pmt.symmat6(mot.m6()) + m_dike
+            total = pmt.MomentTensor.from_values(m9)
+            m9n = m9 / total.scalar_moment()
+            mot = pmt.MomentTensor.from_values(m9n)
 
         m6s = num.repeat(mot.m6()[num.newaxis, :], times.size, axis=0)
         m6s[:, :] *= amplitudes[:, num.newaxis]
