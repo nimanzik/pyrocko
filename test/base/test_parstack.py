@@ -48,7 +48,7 @@ class ParstackTestCase(unittest.TestCase):
                         arrays, offsets, shifts, weights, method, impl='numpy')
 
                     assert o1 == o2
-                    assert numeq(r1, r2, 1e-9)
+                    num.testing.assert_almost_equal(r1, r2, decimal=6)
 
     def test_parstack_limited(self):
         for i in range(10):
@@ -79,7 +79,7 @@ class ParstackTestCase(unittest.TestCase):
 
                     assert o1 == o2
                     num.testing.assert_almost_equal(
-                        r1, r2, decimal=9)
+                        r1, r2, decimal=6)
 
                     n = r1.shape[1]
                     for k in range(n):
@@ -92,7 +92,7 @@ class ParstackTestCase(unittest.TestCase):
 
                         assert o3 == o1-k
                         num.testing.assert_almost_equal(
-                            r1[:, :n-k], r3[:, k:], decimal=9)
+                            r1[:, :n-k], r3[:, k:], decimal=6)
 
                     for k in range(n):
                         r3, o3 = parstack(
@@ -104,7 +104,7 @@ class ParstackTestCase(unittest.TestCase):
 
                         assert o3 == o1+k
                         num.testing.assert_almost_equal(
-                            r1[:, k:], r3[:, :n-k], decimal=9)
+                            r1[:, k:], r3[:, :n-k], decimal=6)
 
                     for k in range(n):
                         r3, o3 = parstack(
@@ -116,7 +116,7 @@ class ParstackTestCase(unittest.TestCase):
 
                         assert o3 == o1
                         num.testing.assert_almost_equal(
-                            r1[:, :n-k], r3[:, :], decimal=9)
+                            r1[:, :n-k], r3[:, :], decimal=6)
                         # assert numeq(r1[:, :n-k], r3[:, :], 1e-9)
 
     def test_parstack_cumulative(self):
@@ -149,7 +149,7 @@ class ParstackTestCase(unittest.TestCase):
                             impl='openmp')
 
                         num.testing.assert_almost_equal(
-                            result, result1*(k+2.), decimal=9)
+                            result, result1*(k+2.), decimal=5)
 
     def benchmark(self):
 
