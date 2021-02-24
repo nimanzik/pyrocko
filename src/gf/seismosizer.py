@@ -2097,11 +2097,12 @@ class RectangularSource(SourceWithDerivedMagnitude):
             # get horizontal tensile dislocation and rotate
             rotmat1 = pmt.euler_to_matrix(
                 d2r * self.dip, d2r * self.strike, d2r * -self.rake)
-            hor_dike = pmt.symmat6([1., 1., 3., 0., 0., 0.])
+            hor_dike = pmt.symmat6(1., 1., 3., 0., 0., 0.)
             m_dike = rotmat1.T * hor_dike * rotmat1
+            print(m_dike)
 
             # add to shear dislocation and normalize moment again
-            m9 = pmt.symmat6(mot.m6()) + m_dike
+            m9 = mot.m() + m_dike
             total = pmt.MomentTensor.from_values(m9)
             m9n = m9 / total.scalar_moment()
             mot = pmt.MomentTensor.from_values(m9n)
