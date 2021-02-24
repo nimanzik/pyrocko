@@ -2065,11 +2065,13 @@ class RectangularSource(SourceWithDerivedMagnitude):
                 interpolation=interpolation)
 
             tensile_slip = self.slip * self.opening_fraction
+            print('ts', tensile_slip)
             shear_slip = self.slip - tensile_slip
 
             amplitudes2 = shear_moduli * shear_slip * amplitudes * dl * dw
 
             if self.opening_fraction > 0:
+                print('including tensile')
                 lambda_moduli = store.config.get_lambda_moduli(
                     self.lat, self.lon,
                     points=points,

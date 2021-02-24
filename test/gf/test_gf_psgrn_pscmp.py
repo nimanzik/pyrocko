@@ -18,6 +18,8 @@ logger = logging.getLogger('pyrocko.test.test_gf_psgrn_pscmp')
 benchmark = Benchmark()
 uniform = num.random.uniform
 
+num.random.seed(30)
+
 r2d = 180. / math.pi
 d2r = 1.0 / r2d
 km = 1e3
