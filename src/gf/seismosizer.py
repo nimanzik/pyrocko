@@ -2068,25 +2068,35 @@ class RectangularSource(SourceWithDerivedMagnitude):
             print('ts', tensile_slip)
             shear_slip = self.slip - tensile_slip
 
-            amplitudes2 = shear_moduli * shear_slip * amplitudes * dl * dw
+            amplitudes2 = []
+            amplitudes2.append(shear_moduli * shear_slip)
+            print('amps2 shear', amplitudes2)
 
-            if self.opening_fraction > 0:
+            if tensile_slip > 0:
                 print('including tensile')
                 lambda_moduli = store.config.get_lambda_moduli(
                     self.lat, self.lon,
                     points=points,
                     interpolation=interpolation)
+                print(lambda_moduli, shear_moduli)
 
-                amplitudes2 += (
-                    lambda_moduli + (2 / 3) * shear_moduli) * tensile_slip * \
-                    amplitudes * dl * dw
+                tensile_iso = (
+                    lambda_moduli + (2 / 3) * shear_moduli) * tensile_slip
+                tensile_dike = (2 / 3) * shear_moduli * tensile_slip
+
+                amplitudes2.extend([tensile_iso, tensile_dike])
+
+            amplitudes2 = num.vstack(amplitudes2).squeeze() * \
+                amplitudes * dl * dw
+            print('amps2', amplitudes2)
+            print(amplitudes2.shape)
 
         else:
             # normalization to retain total moment
             amplitudes2 = amplitudes / num.sum(amplitudes)
             amplitudes2 *= self.get_moment(store, target)
 
-        return points, times, amplitudes, dl, dw
+        return points, times, amplitudes2, dl, dw
 
     def discretize_basesource(self, store, target=None):
 
@@ -2094,23 +2104,30 @@ class RectangularSource(SourceWithDerivedMagnitude):
 
         mot = pmt.MomentTensor(
             strike=self.strike, dip=self.dip, rake=self.rake)
+        m6s = num.repeat(mot.m6()[num.newaxis, :], times.size, axis=0)
 
-        if self.opening_fraction > 0:
-            # get horizontal tensile dislocation and rotate
+        if amplitudes.ndim == 2:
+            # tensile MT components
             rotmat1 = pmt.euler_to_matrix(
                 d2r * self.dip, d2r * self.strike, d2r * -self.rake)
-            hor_dike = pmt.symmat6(1., 1., 3., 0., 0., 0.)
-            m_dike = rotmat1.T * hor_dike * rotmat1
-            print(m_dike)
 
-            # add to shear dislocation and normalize moment again
-            m9 = mot.m() + m_dike
-            total = pmt.MomentTensor.from_values(m9)
-            m9n = m9 / total.scalar_moment()
-            mot = pmt.MomentTensor.from_values(m9n)
+            print('RS rotmat1', rotmat1)
+            iso = pmt.symmat6(1., 1., 1., 0., 0., 0.)
+            dike = pmt.symmat6(-1., -1., 2., 0., 0., 0.)
 
-        m6s = num.repeat(mot.m6()[num.newaxis, :], times.size, axis=0)
-        m6s[:, :] *= amplitudes[:, num.newaxis]
+            rot_iso = pmt.to6(rotmat1.T * iso * rotmat1)
+            rot_dike = pmt.to6(rotmat1.T * dike * rotmat1)
+
+            m6s_iso = num.repeat(rot_iso[num.newaxis, :], times.size, axis=0)
+            m6s_dike = num.repeat(rot_dike[num.newaxis, :], times.size, axis=0)
+            print(rot_dike)
+
+            m6s[:, :] *= amplitudes[0, :][:, num.newaxis]
+            m6s_iso[:, :] *= amplitudes[1, :][:, num.newaxis]
+            m6s_dike[:, :] *= amplitudes[2, :][:, num.newaxis]
+            m6s += m6s_iso + m6s_dike
+        else:
+            m6s[:, :] *= amplitudes[:, num.newaxis]
 
         ds = meta.DiscretizedMTSource(
             lat=self.lat,

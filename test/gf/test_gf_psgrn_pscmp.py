@@ -128,10 +128,10 @@ mantle
             receiver_depth=0. * km,
             source_depth_min=0. * km,
             source_depth_max=15. * km,
-            source_depth_delta=.5 * km,
+            source_depth_delta=.25 * km,
             distance_min=0. * km,
             distance_max=50. * km,
-            distance_delta=.5 * km)
+            distance_delta=.25 * km)
 
         config.validate()
         if not os.path.exists(store_dir):
@@ -165,9 +165,15 @@ mantle
                     zip(fomosto_comps, psgrn_comps, ['N', 'E', 'D'])):
                 fdispl = fcomp.reshape(nnorth, neast)
                 pdispl = pscomp.reshape(nnorth, neast)
+                pcbound = num.max([num.abs(pdispl.min()), pdispl.max()])
+                fcbound = num.max([num.abs(fdispl.min()), fdispl.max()])
+                print('pcbound', pcbound)
+                print('fcbound', fcbound)
 
-                axes[0, i].imshow(pdispl, cmap='seismic')
-                axes[1, i].imshow(fdispl, cmap='seismic')
+                axes[0, i].imshow(
+                    pdispl, cmap='seismic', vmin=-pcbound, vmax=pcbound)
+                axes[1, i].imshow(
+                    fdispl, cmap='seismic', vmin=-pcbound, vmax=pcbound)
                 diff = pdispl - fdispl
                 axes[2, i].imshow(pdispl - fdispl, cmap='seismic')
 
@@ -286,13 +292,13 @@ mantle
             lat=origin.lat,
             lon=origin.lon,
             depth=2. * km,
-            width=0.2 * km,
-            length=0.5 * km,
+            width=2. * km,
+            length=5. * km,
             rake=0.,
-            dip=10.,
-            strike=10.)
+            dip=0.,
+            strike=0.)
 
-        slip = 2.
+        slip = 1.
 
         source_plain = gf.RectangularSource(**TestRF)
         source_plain.update(slip=slip, opening_fraction=1.)
@@ -301,7 +307,8 @@ mantle
 
         gf_sources = [source_plain, source_with_time]
         pscmp_sources = [psgrn_pscmp.PsCmpRectangularSource(
-            opening=slip, **TestRF)]
+            opening=slip, slip=0., **TestRF)]
+        print(pscmp_sources[0])
 
         self.fomosto_vs_psgrn_pscmp(
             pscmp_sources=pscmp_sources, gf_sources=gf_sources)
