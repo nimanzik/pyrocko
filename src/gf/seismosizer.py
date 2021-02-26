@@ -2065,31 +2065,29 @@ class RectangularSource(SourceWithDerivedMagnitude):
                 interpolation=interpolation)
 
             tensile_slip = self.slip * self.opening_fraction
-            print('ts', tensile_slip)
             shear_slip = self.slip - tensile_slip
 
             amplitudes2 = []
             amplitudes2.append(shear_moduli * shear_slip)
-            print('amps2 shear', amplitudes2)
 
             if tensile_slip > 0:
-                print('including tensile')
+                bulk_moduli = store.config.get_bulk_moduli(
+                    self.lat, self.lon,
+                    points=points,
+                    interpolation=interpolation)
+
                 lambda_moduli = store.config.get_lambda_moduli(
                     self.lat, self.lon,
                     points=points,
                     interpolation=interpolation)
-                print(lambda_moduli, shear_moduli)
 
-                tensile_iso = (
-                    lambda_moduli + (2 / 3) * shear_moduli) * tensile_slip
-                tensile_dike = (2 / 3) * shear_moduli * tensile_slip
+                tensile_iso = bulk_moduli * tensile_slip
+                tensile_clvd = (2. / 3.) * shear_moduli * tensile_slip
 
-                amplitudes2.extend([tensile_iso, tensile_dike])
+                amplitudes2.extend([tensile_iso, tensile_clvd])
 
             amplitudes2 = num.vstack(amplitudes2).squeeze() * \
                 amplitudes * dl * dw
-            print('amps2', amplitudes2)
-            print(amplitudes2.shape)
 
         else:
             # normalization to retain total moment
@@ -2111,7 +2109,6 @@ class RectangularSource(SourceWithDerivedMagnitude):
             rotmat1 = pmt.euler_to_matrix(
                 d2r * self.dip, d2r * self.strike, d2r * -self.rake)
 
-            print('RS rotmat1', rotmat1)
             iso = pmt.symmat6(1., 1., 1., 0., 0., 0.)
             dike = pmt.symmat6(-1., -1., 2., 0., 0., 0.)
 
@@ -2120,7 +2117,6 @@ class RectangularSource(SourceWithDerivedMagnitude):
 
             m6s_iso = num.repeat(rot_iso[num.newaxis, :], times.size, axis=0)
             m6s_dike = num.repeat(rot_dike[num.newaxis, :], times.size, axis=0)
-            print(rot_dike)
 
             m6s[:, :] *= amplitudes[0, :][:, num.newaxis]
             m6s_iso[:, :] *= amplitudes[1, :][:, num.newaxis]

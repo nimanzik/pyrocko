@@ -1735,7 +1735,7 @@ class Config(Object):
                                           interpolation=interpolation)
 
     def get_lambda_moduli(self, lat, lon, points,
-                         interpolation=None):
+                          interpolation=None):
         '''
         Get lambda moduli at given points from contained velocity model.
 
@@ -1754,6 +1754,31 @@ class Config(Object):
         return self.get_material_property(lat, lon, points,
                                           parameter='lambda_moduli',
                                           interpolation=interpolation)
+
+    def get_bulk_moduli(self, lat, lon, points,
+                        interpolation=None):
+        '''
+        Get bulk moduli at given points from contained velocity model.
+
+        :param lat: surface origin for coordinate system of ``points``
+        :param points: NumPy array of shape ``(N, 3)``, where each row is
+            a point ``(north, east, depth)``, relative to origin at
+            ``(lat, lon)``
+        :param interpolation: interpolation method. Choose from
+            ``('nearest_neighbor', 'multilinear')``
+        :returns: NumPy array of length N with extracted shear moduli at each
+            point
+
+        The default implementation retrieves and interpolates the lambda moduli
+        from the contained 1D velocity profile.
+        '''
+        lambda_moduli = self.get_material_property(
+            lat, lon, points, parameter='lambda_moduli',
+            interpolation=interpolation)
+        shear_moduli = self.get_material_property(
+            lat, lon, points, parameter='shear_moduli',
+            interpolation=interpolation)
+        return lambda_moduli + (2 / 3) * shear_moduli
 
     def get_vs(self, lat, lon, points, interpolation=None):
         '''

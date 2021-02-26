@@ -579,7 +579,6 @@ class MomentTensor(Object):
                 scalar_moment = magnitude_to_moment(magnitude)
 
             rotmat1 = euler_to_matrix(dip, strike, -rake)
-            print('MT rotmat1', rotmat1)
             m = rotmat1.T * MomentTensor._m_unrot * rotmat1 * scalar_moment
 
         self._m = m
