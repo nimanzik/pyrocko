@@ -1971,7 +1971,9 @@ class RectangularSource(SourceWithDerivedMagnitude):
     opening_fraction = Float.T(
         default=0.,
         help='Determines fraction of slip related to opening.'
-             '(0 - pure shear, 1 - pure tensile)')
+             '(-1 - pure tensile closing,'
+             '  0 - pure shear,'
+             '  1 - pure tensile opening)')
 
     decimation_factor = Int.T(
         optional=True,
@@ -2065,18 +2067,13 @@ class RectangularSource(SourceWithDerivedMagnitude):
                 interpolation=interpolation)
 
             tensile_slip = self.slip * self.opening_fraction
-            shear_slip = self.slip - tensile_slip
+            shear_slip = self.slip - abs(tensile_slip)
 
             amplitudes2 = []
             amplitudes2.append(shear_moduli * shear_slip)
 
-            if tensile_slip > 0:
+            if tensile_slip != 0:
                 bulk_moduli = store.config.get_bulk_moduli(
-                    self.lat, self.lon,
-                    points=points,
-                    interpolation=interpolation)
-
-                lambda_moduli = store.config.get_lambda_moduli(
                     self.lat, self.lon,
                     points=points,
                     interpolation=interpolation)

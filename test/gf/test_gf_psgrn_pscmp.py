@@ -67,10 +67,10 @@ class GFPsgrnPscmpTestCase(unittest.TestCase):
         self.pscmp_store_dir = None
         unittest.TestCase.__init__(self, *args, **kwargs)
 
-    @classmethod
-    def tearDownClass(cls):
-        for d in cls.tempdirs:
-            shutil.rmtree(d)
+#    @classmethod
+ #   def tearDownClass(cls):
+ #       for d in cls.tempdirs:
+  #          shutil.rmtree(d)
 
     def test_isolated_isotropic_component(self):
         shear = 31126160000.0
@@ -117,8 +117,8 @@ mantle
  660. 10.2 5.611 3.918 428.5 172.9
  660. 10.79 5.965 4.229 1349. 549.6 5e17 1e19 1'''.lstrip()))
 
-        store_dir = mkdtemp(prefix='gfstore')
-        #store_dir = '/tmp/pscmp_gfstore'
+        #store_dir = mkdtemp(prefix='gfstore')
+        store_dir = '/tmp/pscmp_gfstore'
         self.tempdirs.append(store_dir)
         store_id = 'psgrn_pscmp_test'
 
@@ -169,7 +169,7 @@ mantle
 
         return store_dir, c
 
-    def fomosto_vs_psgrn_pscmp(self, pscmp_sources, gf_sources):
+    def fomosto_vs_psgrn_pscmp(self, pscmp_sources, gf_sources, atol=2*mm):
 
         def plot_components_compare(fomosto_comps, psgrn_comps):
             import matplotlib.pyplot as plt
@@ -252,7 +252,6 @@ mantle
             interpolation='multilinear')
 
         engine = gf.LocalEngine(store_dirs=[store_dir])
-        atols = [4., 1., 4., 1.]    # nn, ml, nn, ml
 
         for source in gf_sources:
             t0 = time()
@@ -267,8 +266,6 @@ mantle
                     fomosto_comps = [un_fomosto, ue_fomosto, ud_fomosto]
                     psgrn_comps = [un_pscmp, ue_pscmp, ud_pscmp]
                     plot_components_compare(fomosto_comps, psgrn_comps)
-
-                atol = atols[i]
 
                 num.testing.assert_allclose(un_fomosto, un_pscmp, atol=atol*mm)
                 num.testing.assert_allclose(ue_fomosto, ue_pscmp, atol=atol*mm)
@@ -299,9 +296,44 @@ mantle
         pscmp_sources = [psgrn_pscmp.PsCmpRectangularSource(**TestRF)]
 
         self.fomosto_vs_psgrn_pscmp(
-            pscmp_sources=pscmp_sources, gf_sources=gf_sources)
+            pscmp_sources=pscmp_sources, gf_sources=gf_sources, atol=2*mm)
 
     def test_fomosto_vs_psgrn_pscmp_tensile(self):
+
+        origin = gf.Location(
+            lat=10.,
+            lon=-15.)
+
+        # test GF store
+        TestRF = dict(
+            lat=origin.lat,
+            lon=origin.lon,
+            depth=2. * km,
+            width=2. * km,
+            length=5. * km,
+            rake=uniform(-90., 90.),
+            dip=uniform(0., 90.),
+            strike=uniform(0., 360.))
+
+        slip = uniform(1., 2.)
+
+        for open_mode in [-1., 1.]:   # closing, opening
+
+            source_plain = gf.RectangularSource(**TestRF)
+            source_plain.update(slip=slip, opening_fraction=open_mode)
+
+            source_with_time = deepcopy(source_plain)
+            source_with_time.update(time=123.5)
+
+            gf_sources = [source_plain, source_with_time]
+
+            pscmp_sources = [psgrn_pscmp.PsCmpRectangularSource(
+                opening=slip * open_mode, slip=0., **TestRF)]
+
+            self.fomosto_vs_psgrn_pscmp(
+                pscmp_sources=pscmp_sources, gf_sources=gf_sources, atol=5*mm)
+
+    def test_fomosto_vs_psgrn_pscmp_tensile_shear(self):
 
         origin = gf.Location(
             lat=10.,
@@ -318,20 +350,23 @@ mantle
             dip=uniform(0., 90.),
             strike=uniform(0., 360.))
 
+        opening_fraction = 0.4
         slip = uniform(1., 5.)
+        opening = slip * opening_fraction
+        pscmp_slip = slip - opening
 
         source_plain = gf.RectangularSource(**TestRF)
-        source_plain.update(slip=slip, opening_fraction=1.)
+        source_plain.update(slip=slip, opening_fraction=opening_fraction)
 
         source_with_time = deepcopy(source_plain)
         source_with_time.update(time=123.5)
 
         gf_sources = [source_plain, source_with_time]
         pscmp_sources = [psgrn_pscmp.PsCmpRectangularSource(
-            opening=slip, slip=0., **TestRF)]
+            opening=opening, slip=pscmp_slip, **TestRF)]
 
         self.fomosto_vs_psgrn_pscmp(
-            pscmp_sources=pscmp_sources, gf_sources=gf_sources)
+            pscmp_sources=pscmp_sources, gf_sources=gf_sources, atol=5*mm)
 
     def plot_gf_distance_sampling(self):
         origin = gf.Location(
