@@ -15,7 +15,7 @@ engine = gf.LocalEngine(store_superdirs=['.'])
 # Centroid UTM position is defined relatively to geographical lat, lon position
 # Horizontal closing sill with an N104W azimuth.
 # Slip is split to shear and tensile slip where "opening_fraction" determines
-# the direction and amount of opening/closing defined from -1, 1 
+# the direction and amount of opening/closing defined from -1, 1
 # for a pure shear dislocation "opening_fraction" is 0.
 
 km = 1e3  # for convenience

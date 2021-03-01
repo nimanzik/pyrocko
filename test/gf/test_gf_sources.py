@@ -459,7 +459,8 @@ class GFSourcesTestCase(unittest.TestCase):
             depth=depth,
             slip=pmt.magnitude_to_moment(5.0) / (
                 5*km * 5*km * (
-                    store.config.earthmodel_1d.material(depth).bulk() * abs(of) +
+                    store.config.earthmodel_1d.material(
+                        depth).bulk() * abs(of) +
                     store.config.earthmodel_1d.material(
                         depth).shear_modulus() * (1 - abs(of)))),
             width=5*km,
