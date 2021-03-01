@@ -8,6 +8,7 @@ import numpy as num
 import os
 import shutil
 from copy import deepcopy
+from multiprocessing import cpu_count
 
 from pyrocko import orthodrome as ortd
 from pyrocko import util, gf, cake  # noqa
@@ -62,15 +63,20 @@ def statics(engine, source, starget):
 class GFPsgrnPscmpTestCase(unittest.TestCase):
 
     tempdirs = []
+    pscmp_store_dir = None
 
     def __init__(self, *args, **kwargs):
-        self.pscmp_store_dir = None
         unittest.TestCase.__init__(self, *args, **kwargs)
 
-#    @classmethod
- #   def tearDownClass(cls):
- #       for d in cls.tempdirs:
-  #          shutil.rmtree(d)
+    @classmethod
+    def setUpClass(cls):
+        cls.pscmp_store_dir, cls.psgrn_config = \
+            cls._create_psgrn_pscmp_store(cls)
+
+    @classmethod
+    def tearDownClass(cls):
+        for d in cls.tempdirs:
+            shutil.rmtree(d)
 
     def test_isolated_isotropic_component(self):
         shear = 31126160000.0
@@ -91,8 +97,7 @@ class GFPsgrnPscmpTestCase(unittest.TestCase):
 
     def get_pscmp_store_info(self):
         if self.pscmp_store_dir is None:
-            self.pscmp_store_dir, self.psgrn_config = \
-                self._create_psgrn_pscmp_store()
+            raise ValueError('Store does not exist!')
 
         return self.pscmp_store_dir, self.psgrn_config
 
@@ -117,8 +122,8 @@ mantle
  660. 10.2 5.611 3.918 428.5 172.9
  660. 10.79 5.965 4.229 1349. 549.6 5e17 1e19 1'''.lstrip()))
 
-        #store_dir = mkdtemp(prefix='gfstore')
-        store_dir = '/tmp/pscmp_gfstore'
+        store_dir = mkdtemp(prefix='gfstore')
+        # store_dir = '/tmp/pscmp_gfstore'
         self.tempdirs.append(store_dir)
         store_id = 'psgrn_pscmp_test'
 
@@ -158,7 +163,7 @@ mantle
 
             # build store
             try:
-                psgrn_pscmp.build(store_dir, nworkers=4)
+                psgrn_pscmp.build(store_dir, nworkers=cpu_count())
             except psgrn_pscmp.PsCmpError as e:
                 if str(e).find('could not start psgrn/pscmp') != -1:
                     logger.warn('psgrn/pscmp not installed; '
@@ -181,7 +186,7 @@ mantle
                 fdispl = fcomp.reshape(nnorth, neast)
                 pdispl = pscomp.reshape(nnorth, neast)
                 pcbound = num.max([num.abs(pdispl.min()), pdispl.max()])
-                fcbound = num.max([num.abs(fdispl.min()), fdispl.max()])
+                # fcbound = num.max([num.abs(fdispl.min()), fdispl.max()])
 
                 axes[0, i].imshow(
                     pdispl, cmap='seismic', vmin=-pcbound, vmax=pcbound)
@@ -296,7 +301,7 @@ mantle
         pscmp_sources = [psgrn_pscmp.PsCmpRectangularSource(**TestRF)]
 
         self.fomosto_vs_psgrn_pscmp(
-            pscmp_sources=pscmp_sources, gf_sources=gf_sources, atol=3*mm)
+            pscmp_sources=pscmp_sources, gf_sources=gf_sources, atol=5*mm)
 
     def test_fomosto_vs_psgrn_pscmp_tensile(self):
 
@@ -331,7 +336,7 @@ mantle
                 opening=slip * open_mode, slip=0., **TestRF)]
 
             self.fomosto_vs_psgrn_pscmp(
-                pscmp_sources=pscmp_sources, gf_sources=gf_sources, atol=5*mm)
+                pscmp_sources=pscmp_sources, gf_sources=gf_sources, atol=7*mm)
 
     def test_fomosto_vs_psgrn_pscmp_tensile_shear(self):
 
@@ -366,7 +371,7 @@ mantle
             opening=opening, slip=pscmp_slip, **TestRF)]
 
         self.fomosto_vs_psgrn_pscmp(
-            pscmp_sources=pscmp_sources, gf_sources=gf_sources, atol=5*mm)
+            pscmp_sources=pscmp_sources, gf_sources=gf_sources, atol=7*mm)
 
     def plot_gf_distance_sampling(self):
         origin = gf.Location(

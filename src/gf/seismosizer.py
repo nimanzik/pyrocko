@@ -2026,7 +2026,7 @@ class RectangularSource(SourceWithDerivedMagnitude):
             if amplitudes.ndim == 2:
                 # CLVD component has no net moment, leave out
                 return float(pmt.moment_to_magnitude(
-                    num.sum(amplitudes[0:2, :].sum())))
+                    num.sum(num.abs(amplitudes[0:2, :]).sum())))
             else:
                 return float(pmt.moment_to_magnitude(num.sum(amplitudes)))
 
@@ -2097,7 +2097,7 @@ class RectangularSource(SourceWithDerivedMagnitude):
             moment = self.get_moment(store, target)
 
             amplitudes2 = [
-                amplitudes_norm * moment * (1 - self.opening_fraction)]
+                amplitudes_norm * moment * (1 - abs(self.opening_fraction))]
             if self.opening_fraction != 0.:
                 amplitudes2.append(
                     amplitudes_norm * self.opening_fraction * moment)

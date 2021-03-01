@@ -23,8 +23,8 @@ Download :download:`gf_forward_example1.py </../../examples/gf_forward_example1.
     Synthetic seismograms calculated through :class:`pyrocko.gf` displayed in :doc:`/apps/snuffler/index`. The three traces show the east, north and vertical synthetical displacement stimulated by a double-couple source at 155 km distance.
 
 
-Calculate spatial surface displacement from a local GF store
--------------------------------------------------------------
+Calculate spatial surface displacement from a local GF store - Earthquake
+-------------------------------------------------------------------------
 
 In this example we create a :class:`~pyrocko.gf.seismosizer.RectangularSource` and compute the spatial static displacement invoked by that rupture.
 
@@ -41,6 +41,29 @@ Download :download:`gf_forward_example2.py </../../examples/gf_forward_example2.
 
 .. literalinclude :: /../../examples/gf_forward_example2.py
     :language: python
+
+
+
+Calculate spatial surface displacement from a local GF store - Sill
+-------------------------------------------------------------------
+
+In this example we create a :class:`~pyrocko.gf.seismosizer.RectangularSource` and compute the spatial static displacement invoked by a
+magmatic contracting sill.
+
+We will utilize :class:`~pyrocko.gf.seismosizer.LocalEngine`, :class:`~pyrocko.gf.targets.StaticTarget` and :class:`~pyrocko.gf.targets.SatelliteTarget`.
+
+.. figure:: /static/gf_static_displacement_sill.png
+    :align: center
+    :width: 90%
+    :alt: Static displacement from a contracting sill calculated through pyrocko
+
+    Synthetic surface displacement from a contracting sill, with a N104W azimuth, in the Line-of-sight (LOS), east, north and vertical directions. LOS as for Envisat satellite (Look Angle: 23., Heading:-76). Positive motion toward the satellite.
+
+Download :download:`gf_forward_example2_sill.py </../../examples/gf_forward_example2_sill.py>`
+
+.. literalinclude :: /../../examples/gf_forward_example2_sill.py
+    :language: python
+
 
 
 Calculate spatial surface displacement and export Kite scenes

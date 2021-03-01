@@ -447,7 +447,7 @@ class GFSourcesTestCase(unittest.TestCase):
                 store, gf.Target(interpolation='nearest_neighbor')))
 
         # mixed
-        of = 0.4
+        of = -0.4
         rect5 = gf.RectangularSource(
             depth=depth,
             magnitude=5.0,
@@ -459,9 +459,9 @@ class GFSourcesTestCase(unittest.TestCase):
             depth=depth,
             slip=pmt.magnitude_to_moment(5.0) / (
                 5*km * 5*km * (
-                    store.config.earthmodel_1d.material(depth).bulk() * of +
+                    store.config.earthmodel_1d.material(depth).bulk() * abs(of) +
                     store.config.earthmodel_1d.material(
-                        depth).shear_modulus() * (1 - of))),
+                        depth).shear_modulus() * (1 - abs(of)))),
             width=5*km,
             length=5*km,
             opening_fraction=of)
