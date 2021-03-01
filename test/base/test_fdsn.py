@@ -128,7 +128,7 @@ class FDSNTestCase(unittest.TestCase):
             fpath = common.test_data_file('%s_1014-01-01_all.xml' % site)
             stationxml.load_xml(filename=fpath)
 
-    # @unittest.skip('needs manual inspection')
+    @unittest.skip('needs manual inspection')
     @common.require_internet
     @common.skip_on_download_error
     def test_response(self, ntest=None):
