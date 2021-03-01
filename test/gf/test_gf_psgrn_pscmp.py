@@ -267,9 +267,9 @@ mantle
                     psgrn_comps = [un_pscmp, ue_pscmp, ud_pscmp]
                     plot_components_compare(fomosto_comps, psgrn_comps)
 
-                num.testing.assert_allclose(un_fomosto, un_pscmp, atol=atol*mm)
-                num.testing.assert_allclose(ue_fomosto, ue_pscmp, atol=atol*mm)
-                num.testing.assert_allclose(ud_fomosto, ud_pscmp, atol=atol*mm)
+                num.testing.assert_allclose(un_fomosto, un_pscmp, atol=atol)
+                num.testing.assert_allclose(ue_fomosto, ue_pscmp, atol=atol)
+                num.testing.assert_allclose(ud_fomosto, ud_pscmp, atol=atol)
 
     def test_fomosto_vs_psgrn_pscmp_shear(self):
 
@@ -296,7 +296,7 @@ mantle
         pscmp_sources = [psgrn_pscmp.PsCmpRectangularSource(**TestRF)]
 
         self.fomosto_vs_psgrn_pscmp(
-            pscmp_sources=pscmp_sources, gf_sources=gf_sources, atol=2*mm)
+            pscmp_sources=pscmp_sources, gf_sources=gf_sources, atol=3*mm)
 
     def test_fomosto_vs_psgrn_pscmp_tensile(self):
 

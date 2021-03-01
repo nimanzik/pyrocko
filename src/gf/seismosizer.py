@@ -2023,7 +2023,12 @@ class RectangularSource(SourceWithDerivedMagnitude):
                     'interpolation method are available.')
 
             amplitudes = self._discretize(store, target)[2]
-            return float(pmt.moment_to_magnitude(num.sum(amplitudes)))
+            if amplitudes.ndim == 2:
+                # CLVD component has no net moment, leave out
+                return float(pmt.moment_to_magnitude(
+                    num.sum(amplitudes[0:2, :].sum())))
+            else:
+                return float(pmt.moment_to_magnitude(num.sum(amplitudes)))
 
         else:
             return float(pmt.moment_to_magnitude(1.0))
@@ -2088,8 +2093,16 @@ class RectangularSource(SourceWithDerivedMagnitude):
 
         else:
             # normalization to retain total moment
-            amplitudes2 = amplitudes / num.sum(amplitudes)
-            amplitudes2 *= self.get_moment(store, target)
+            amplitudes_norm = amplitudes / num.sum(amplitudes)
+            moment = self.get_moment(store, target)
+
+            amplitudes2 = [
+                amplitudes_norm * moment * (1 - self.opening_fraction)]
+            if self.opening_fraction != 0.:
+                amplitudes2.append(
+                    amplitudes_norm * self.opening_fraction * moment)
+
+            amplitudes2 = num.vstack(amplitudes2).squeeze()
 
         return points, times, amplitudes2, dl, dw
 
@@ -2101,26 +2114,42 @@ class RectangularSource(SourceWithDerivedMagnitude):
             strike=self.strike, dip=self.dip, rake=self.rake)
         m6s = num.repeat(mot.m6()[num.newaxis, :], times.size, axis=0)
 
-        if amplitudes.ndim == 2:
-            # tensile MT components
+        if amplitudes.ndim == 1:
+            m6s[:, :] *= amplitudes[:, num.newaxis]
+        elif amplitudes.ndim == 2:
+            # shear MT components
             rotmat1 = pmt.euler_to_matrix(
                 d2r * self.dip, d2r * self.strike, d2r * -self.rake)
-
-            iso = pmt.symmat6(1., 1., 1., 0., 0., 0.)
-            dike = pmt.symmat6(-1., -1., 2., 0., 0., 0.)
-
-            rot_iso = pmt.to6(rotmat1.T * iso * rotmat1)
-            rot_dike = pmt.to6(rotmat1.T * dike * rotmat1)
-
-            m6s_iso = num.repeat(rot_iso[num.newaxis, :], times.size, axis=0)
-            m6s_dike = num.repeat(rot_dike[num.newaxis, :], times.size, axis=0)
-
             m6s[:, :] *= amplitudes[0, :][:, num.newaxis]
-            m6s_iso[:, :] *= amplitudes[1, :][:, num.newaxis]
-            m6s_dike[:, :] *= amplitudes[2, :][:, num.newaxis]
-            m6s += m6s_iso + m6s_dike
-        else:
-            m6s[:, :] *= amplitudes[:, num.newaxis]
+
+            if amplitudes.shape[0] == 2:
+                # tensile MT components - moment/magnitude input
+                tensile = pmt.symmat6(1., 1., 3., 0., 0., 0.)
+                rot_tensile = pmt.to6(rotmat1.T * tensile * rotmat1)
+
+                m6s_tensile = num.repeat(
+                    rot_tensile[num.newaxis, :], times.size, axis=0)
+                m6s_tensile[:, :] *= amplitudes[1, :][:, num.newaxis]
+                m6s += m6s_tensile
+
+            elif amplitudes.shape[0] == 3:
+                # tensile MT components - slip input
+                iso = pmt.symmat6(1., 1., 1., 0., 0., 0.)
+                clvd = pmt.symmat6(-1., -1., 2., 0., 0., 0.)
+
+                rot_iso = pmt.to6(rotmat1.T * iso * rotmat1)
+                rot_clvd = pmt.to6(rotmat1.T * clvd * rotmat1)
+
+                m6s_iso = num.repeat(
+                    rot_iso[num.newaxis, :], times.size, axis=0)
+                m6s_clvd = num.repeat(
+                    rot_clvd[num.newaxis, :], times.size, axis=0)
+
+                m6s_iso[:, :] *= amplitudes[1, :][:, num.newaxis]
+                m6s_clvd[:, :] *= amplitudes[2, :][:, num.newaxis]
+                m6s += m6s_iso + m6s_clvd
+            else:
+                raise ValueError('Unknwown amplitudes shape!')
 
         ds = meta.DiscretizedMTSource(
             lat=self.lat,
