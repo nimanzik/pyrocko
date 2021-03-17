@@ -1971,9 +1971,9 @@ class RectangularSource(SourceWithDerivedMagnitude):
     opening_fraction = Float.T(
         default=0.,
         help='Determines fraction of slip related to opening.'
-             '(-1 - pure tensile closing,'
-             '  0 - pure shear,'
-             '  1 - pure tensile opening)')
+             '(``-1``: pure tensile closing,'
+             '``0``: pure shear,'
+             '``1``: pure tensile opening)')
 
     decimation_factor = Int.T(
         optional=True,
