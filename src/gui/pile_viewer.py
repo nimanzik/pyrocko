@@ -3801,16 +3801,17 @@ def MakePileViewerMainClass(base):
             self.update()
 
         def myclose(self, return_tag=''):
+            self.return_tag = return_tag
+            self.window().close()
+
+        def cleanup(self):
+            self.about_to_close.emit()
             self.timer.stop()
             if self.follow_timer is not None:
                 self.follow_timer.stop()
-            self.window().close()
 
             for snuffling in list(self.snufflings):
                 self.remove_snuffling(snuffling)
-
-            self.about_to_close.emit()
-            self.return_tag = return_tag
 
         def set_error_message(self, key, value):
             if value is None:
@@ -4093,6 +4094,9 @@ class PileViewer(qw.QFrame):
             self.adjust_controls)
         self.viewer.about_to_close.connect(
             self.save_inputline_history)
+
+    def cleanup(self):
+        self.viewer.cleanup()
 
     def get_progressbars(self):
         return self.progressbars

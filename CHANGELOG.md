@@ -4,7 +4,7 @@ All notable changes to Pyrocko will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+[##](##) [Unreleased]
 
 ### Added
 - New command line option for jackseis: `--record-length`
@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 - GmtPy now forces PDF version 1.5 when producing PDFs (newer PDFs caused
   problems when included in XeLaTeX).
+- Snuffler now asks for confirmation when the user attempts to close the
+  window.
 
 ## [2020.10.26]
 
