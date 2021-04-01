@@ -166,7 +166,7 @@ mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
 
     mst = mstg->traces;
     while (mst) {
-        
+
         if (unpackdata == Py_True) {
             array_dims[0] = mst->numsamples;
             switch (mst->sampletype) {
@@ -212,7 +212,7 @@ mseed_get_traces(PyObject *m, PyObject *args, PyObject *kwds) {
             mst_freegroup (&mstg);
             return NULL;
         }
-        
+
         PyList_Append(out_traces, out_trace);
         Py_XDECREF(out_trace);
         mst = mst->next;
@@ -235,7 +235,7 @@ static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
         PyErr_SetString(PyExc_ValueError, "Trace record must be a tuple of (network, station, location, channel, starttime, endtime, samprate, dataquality, data).");
         return EXIT_FAILURE;
     }
-    
+
     if (!PyArg_ParseTuple(in_trace, "ssssLLdsO",
                           &network, &station, &location, &channel,
                           &mst->starttime, &mst->endtime, &mst->samprate, &dataquality, &array)) {
@@ -301,10 +301,10 @@ static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
     mst->numsamples = length;
     mst->samplecnt = length;
 
-    Py_BEGIN_ALLOW_THREADS
+    NPY_BEGIN_ALLOW_THREADS
     mst->datasamples = calloc(length, ms_samplesize(mst->sampletype));
     ret = memcpy(mst->datasamples, PyArray_DATA(contiguous_array), length*PyArray_ITEMSIZE(contiguous_array));
-    Py_END_ALLOW_THREADS
+    NPY_END_ALLOW_THREADS
     if (ret == NULL) {
         Py_DECREF(contiguous_array);
         PyErr_SetString(PyExc_MemoryError, "Could not copy memory.");
@@ -337,7 +337,7 @@ mseed_store_traces (PyObject *m, PyObject *args, PyObject *kwds) {
     int           msdetype = DE_FLOAT64;
     int64_t       psamples;
     size_t        record_length = 4096;
-    
+
     FILE          *outfile;
 
 
@@ -480,7 +480,7 @@ mseed_bytes (PyObject *m, PyObject *args, PyObject *kwds) {
 }
 
 static PyMethodDef mseed_ext_methods[] = {
-    {"get_traces", (PyCFunction) mseed_get_traces, METH_VARARGS | METH_KEYWORDS, 
+    {"get_traces", (PyCFunction) mseed_get_traces, METH_VARARGS | METH_KEYWORDS,
      PyDoc_STR("get_traces(filename, dataflag)\n"
                "Get all traces stored in an mseed file.\n\n"
                "Returns a list of tuples, one tuple for each trace in the file. Each tuple\n"
@@ -491,10 +491,10 @@ static PyMethodDef mseed_ext_methods[] = {
                "in libmseed. If dataflag is True, `data` is a numpy array containing the\n"
                "data. If dataflag is False, the data is not unpacked and `data` is None.\n") },
 
-    {"store_traces", (PyCFunction) mseed_store_traces, METH_VARARGS | METH_KEYWORDS, 
+    {"store_traces", (PyCFunction) mseed_store_traces, METH_VARARGS | METH_KEYWORDS,
      PyDoc_STR("store_traces(traces, filename, record_length=4096)\n") },
 
-    {"mseed_bytes", (PyCFunction) mseed_bytes, METH_VARARGS | METH_KEYWORDS, 
+    {"mseed_bytes", (PyCFunction) mseed_bytes, METH_VARARGS | METH_KEYWORDS,
      PyDoc_STR("mseed_bytes(traces, nbytes, record_length=4096)\n") },
 
     {NULL, NULL, 0, NULL}        /* Sentinel */
