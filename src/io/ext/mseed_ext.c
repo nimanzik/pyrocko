@@ -301,10 +301,13 @@ static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
     mst->numsamples = length;
     mst->samplecnt = length;
 
+    PyArray_INCREF(contiguous_array);
     NPY_BEGIN_ALLOW_THREADS
     mst->datasamples = calloc(length, ms_samplesize(mst->sampletype));
     ret = memcpy(mst->datasamples, PyArray_DATA(contiguous_array), length*PyArray_ITEMSIZE(contiguous_array));
     NPY_END_ALLOW_THREADS
+    PyArray_XDECREF(contiguous_array)
+
     if (ret == NULL) {
         Py_DECREF(contiguous_array);
         PyErr_SetString(PyExc_MemoryError, "Could not copy memory.");
