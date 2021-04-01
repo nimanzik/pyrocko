@@ -306,7 +306,7 @@ static int tuple2mst(PyObject* in_trace, MSTrace* mst, int* msdetype) {
     mst->datasamples = calloc(length, ms_samplesize(mst->sampletype));
     ret = memcpy(mst->datasamples, PyArray_DATA(contiguous_array), length*PyArray_ITEMSIZE(contiguous_array));
     NPY_END_ALLOW_THREADS
-    PyArray_XDECREF(contiguous_array)
+    PyArray_XDECREF(contiguous_array);
 
     if (ret == NULL) {
         Py_DECREF(contiguous_array);
