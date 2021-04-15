@@ -208,12 +208,16 @@ name: tests-gf
 steps:
 - name: tests-gf
   image: pyrocko-nest
+  volumes:
+  - name: data-cache
+    path: /tmp/data-cache
   pull: never
   commands:
   - python3 setup.py install -f
   - pip3 install utm
   - pip3 install git+https://github.com/pyrocko/kite
   - pip3 install obspy
+  - ln -s test/data /tmp/data-cache
   - python3 -m coverage run --parallel-mode -m nose test.gf
   - for x in .coverage.* ; do mv $x $${x#.} ; done
 
@@ -229,6 +233,12 @@ steps:
       from_secret: rsync-user
     RSYNC_KEY:
       from_secret: rsync-key
+
+volumes:
+- name: data-cache
+  host:
+    path:
+      from_secret: test-data-path
 
 ---
 
