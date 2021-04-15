@@ -237,8 +237,7 @@ steps:
 volumes:
 - name: data-cache
   host:
-    path:
-      from_secret: test-data-path
+    path: /data/local/home/pyrocko-testing/drone-test-data
 
 ---
 
