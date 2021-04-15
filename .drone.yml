@@ -178,11 +178,15 @@ steps:
 - name: tests-base
   image: pyrocko-nest
   pull: never
+  volumes:
+  - name: data-cache
+    path: /tmp/data-cache
   commands:
   - python3 setup.py install -f
   - pip3 install utm
   - pip3 install git+https://github.com/pyrocko/kite
   - pip3 install obspy
+  - ln -s /tmp/data-cache test/data
   - python3 -m coverage run --parallel-mode -m nose test.base
   - for x in .coverage.* ; do mv $x $${x#.} ; done
 
@@ -198,6 +202,11 @@ steps:
       from_secret: rsync-user
     RSYNC_KEY:
       from_secret: rsync-key
+
+volumes:
+- name: data-cache
+  host:
+    path: /data/local/home/pyrocko-testing/drone-test-data
 
 ---
 
