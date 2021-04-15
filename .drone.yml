@@ -217,7 +217,7 @@ steps:
   - pip3 install utm
   - pip3 install git+https://github.com/pyrocko/kite
   - pip3 install obspy
-  - ln -s test/data /tmp/data-cache
+  - ln -s /tmp/data-cache test/data
   - python3 -m coverage run --parallel-mode -m nose test.gf
   - for x in .coverage.* ; do mv $x $${x#.} ; done
 
