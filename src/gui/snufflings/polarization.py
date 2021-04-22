@@ -1,5 +1,6 @@
 import logging
 import numpy as num
+import matplotlib
 from matplotlib import patches
 from pyrocko import util, trace, plot
 from pyrocko.gui.snuffling import Snuffling, Param, Marker, Choice, Switch, \
@@ -143,6 +144,8 @@ Scale*.
         self.figure_key = None
         self.nsl_to_amax = {}
         self.last_rotate_to_rt = False
+
+        self.font_size = float(matplotlib.rcParams['font.size'])
 
     def panel_visibility_changed(self, visible):
         viewer = self.get_viewer()
@@ -560,7 +563,6 @@ Scale*.
                     axes_tr.my_dots[itr].set_data(tp, yp)
 
             if self.azimuth != 0.0 or self.rotate_to_rt:
-                fontsize = 10.
                 color = plot.mpl_color('skyblue1')
 
                 xn = num.sin(bazimuth*d2r)
@@ -575,11 +577,13 @@ Scale*.
 
                 chas_rot = self.get_selected_channels_rotated()
 
+                font_size = self.font_size
+
                 a1 = axes_01.annotate(
                     chas_rot[1],
                     xy=(amax*xn, amax*yn),
                     xycoords='data',
-                    xytext=(-fontsize*(xe+.5*xn), -fontsize*(ye+.5*yn)),
+                    xytext=(-font_size*(xe+.5*xn), -font_size*(ye+.5*yn)),
                     textcoords='offset points',
                     va='center',
                     ha='center',
@@ -594,7 +598,7 @@ Scale*.
                     chas_rot[0],
                     xy=(amax*xe, amax*ye),
                     xycoords='data',
-                    xytext=(-fontsize*(xn+.5*xe), -fontsize*(yn+.5*ye)),
+                    xytext=(-font_size*(xn+.5*xe), -font_size*(yn+.5*ye)),
                     textcoords='offset points',
                     va='center',
                     ha='center',
@@ -726,12 +730,11 @@ Scale*.
         width, height = fig.canvas.get_width_height()
         pixels = get_pixels_factor(fig)
 
-        font_size = 10.
-        margin_left = margin_right = 4. * font_size / pixels
-        margin_top = margin_bottom = 4. * font_size / pixels
+        margin_left = margin_right = 4. * self.font_size / pixels
+        margin_top = margin_bottom = 4. * self.font_size / pixels
 
-        spacing_width = 3. * font_size / pixels
-        spacing_height = 4. * font_size / pixels
+        spacing_width = 3. * self.font_size / pixels
+        spacing_height = 4. * self.font_size / pixels
 
         axes_height_avail = height - (ny - 1) * spacing_height \
             - margin_top - margin_bottom
