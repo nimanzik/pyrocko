@@ -147,6 +147,15 @@ Scale*.
 
         self.font_size = float(matplotlib.rcParams['font.size'])
 
+        self.colors = {
+            'fg':  matplotlib.rcParams['axes.edgecolor'],
+            'lines': 'black',
+            'rot': plot.mpl_color('skyblue1'),
+            'pca_2d': plot.mpl_color('scarletred1'),
+            'pca_3d': plot.mpl_color('plum2'),
+            'backazimuth': plot.mpl_color('aluminium3'),
+            'time_window': plot.mpl_color('aluminium2')}
+
     def panel_visibility_changed(self, visible):
         viewer = self.get_viewer()
         if visible:
@@ -330,9 +339,9 @@ Scale*.
                 axes.my_stuff = []
 
                 axes.my_line, = axes.plot(
-                    [], [], color='black', lw=1.0)
+                    [], [], color=self.colors['lines'], lw=1.0)
                 axes.my_dot, = axes.plot(
-                    [], [], 'o', ms=4, color='black')
+                    [], [], 'o', ms=4, color=self.colors['lines'])
 
             for axes in (axes_01, axes_02, axes_12):
                 axes.get_xaxis().set_tick_params(
@@ -350,8 +359,12 @@ Scale*.
             lines = []
             dots = []
             for i in range(3):
-                lines.append(axes_tr.plot([], [], color='black', lw=1.0)[0])
-                dots.append(axes_tr.plot([], [], 'o', ms=4, color='black')[0])
+                lines.append(
+                    axes_tr.plot(
+                        [], [], color=self.colors['lines'], lw=1.0)[0])
+                dots.append(
+                    axes_tr.plot(
+                        [], [], 'o', ms=4, color=self.colors['lines'])[0])
 
             axes_tr.my_lines = lines
             axes_tr.my_dots = dots
@@ -406,10 +419,10 @@ Scale*.
         chas = self.get_selected_channels()
         if self.azimuth != 0 or self.rotate_to_rt:
             chas_rot = self.get_selected_channels_rotated()
-            rcolor = plot.mpl_color('skyblue1')
+            rcolor = self.colors['rot']
         else:
             chas_rot = chas
-            rcolor = 'black'
+            rcolor = self.colors['fg']
 
         axes_01.set_ylabel(chas[1])
         axes_02.set_ylabel(chas[2])
@@ -563,7 +576,7 @@ Scale*.
                     axes_tr.my_dots[itr].set_data(tp, yp)
 
             if self.azimuth != 0.0 or self.rotate_to_rt:
-                color = plot.mpl_color('skyblue1')
+                color = self.colors['rot']
 
                 xn = num.sin(bazimuth*d2r)
                 yn = num.cos(bazimuth*d2r)
@@ -607,7 +620,7 @@ Scale*.
                 axes_01.my_stuff.extend([l1, a1, l2, a2])
 
             axes_tr.my_stuff.append(axes_tr.axvspan(
-                tmin - tref, tmax - tref, color=plot.mpl_color('aluminium2')))
+                tmin - tref, tmax - tref, color=self.colors['time_window']))
 
             axes_tr.set_ylim(-1, 3)
             axes_tr.set_xlim(tmin - tref - tpad, tmax - tref + tpad)
@@ -627,7 +640,7 @@ Scale*.
 
                         ell = self.draw_cov_ellipse(
                             evals[:2], evecs[:2, :2],
-                            color=plot.mpl_color('scarletred1'), alpha=0.5)
+                            color=self.colors['pca_2d'], alpha=0.5)
 
                         axes.add_artist(ell)
                         axes.my_stuff.append(ell)
@@ -635,12 +648,12 @@ Scale*.
                         l1, = axes.plot(
                             [-amax*evecs[0, -1], amax*evecs[0, -1]],
                             [-amax*evecs[1, -1], amax*evecs[1, -1]],
-                            color=plot.mpl_color('scarletred1'), alpha=0.5)
+                            color=self.colors['pca_2d'], alpha=0.5)
 
                         l2, = axes.plot(
                             [-amax*evecs[0, -2], amax*evecs[0, -2]],
                             [-amax*evecs[1, -2], amax*evecs[1, -2]],
-                            color=plot.mpl_color('scarletred1'), alpha=0.2)
+                            color=self.colors['pca_2d'], alpha=0.2)
 
                         axes.my_stuff.extend([l1, l2])
 
@@ -666,7 +679,7 @@ Scale*.
 
                         # ell = self.draw_cov_ellipse(
                         #     evals[[ix, iy]], evecs[[ix, iy], [ix, iy]],
-                        #     color=plot.mpl_color('plum1'), alpha=0.5)
+                        #     color=self.colors['pca_3d'], alpha=0.5)
 
                         # axes.add_artist(ell)
                         # axes.my_stuff.append(ell)
@@ -679,7 +692,7 @@ Scale*.
                             lv, = axes.plot(
                                 [-amax*evecs_[ix, ie], amax*evecs_[ix, ie]],
                                 [-amax*evecs_[iy, ie], amax*evecs_[iy, ie]],
-                                color=plot.mpl_color('plum1'), alpha=alpha)
+                                color=self.colors['pca_3d'], alpha=alpha)
 
                             axes.my_stuff.extend([lv])
 
@@ -691,7 +704,7 @@ Scale*.
                     [0., amax*num.cos((90. - nsl_to_bazi[nsl])*d2r)],
                     [0., amax*num.sin((90. - nsl_to_bazi[nsl])*d2r)],
                     '--',
-                    color=plot.mpl_color('aluminium3'))
+                    color=self.colors['backazimuth'])
 
                 axes_01.my_stuff.extend([l1])
 
