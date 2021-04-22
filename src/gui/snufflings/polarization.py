@@ -410,7 +410,7 @@ Scale*.
 
     def pca(self, trs):
 
-        if None in trs:
+        if any(tr is None for tr in trs):
             raise PCAError('Missing component')
 
         nss = [tr.data_len() for tr in trs]
