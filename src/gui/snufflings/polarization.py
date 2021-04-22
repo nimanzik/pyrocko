@@ -752,22 +752,26 @@ Scale*.
         axes_height_avail = height - (ny - 1) * spacing_height \
             - margin_top - margin_bottom
 
-        if axes_height_avail <= 0.0:
-            raise LayoutError('Not enough space vertically.')
+        a_min = 5.
+
+        if axes_height_avail < a_min * ny:
+            axes_height_avail = a_min * ny
+            logger.warn('Not enough space vertically.')
 
         axes_width_avail = width - (nx - 1) * spacing_width \
             - margin_left - margin_right
 
+        if axes_width_avail < a_min * (nx + 2):
+            axes_width_avail = a_min * (nx + 2)
+            logger.warn('Not enough space horizontally.')
+
         a_height = axes_height_avail / ny
         a_width = axes_width_avail / (nx + 2)
 
-        a = min(a_height, a_width)
+        a = max(min(a_height, a_width), a_min)
 
         pad_height = (a_height - a) * ny
         pad_width = (a_width - a) * (nx + 2)
-
-        if axes_width_avail <= 0.0:
-            raise LayoutError('Not enough space horizontally.')
 
         for iy in range(ny):
             y = height - 0.5 * pad_height - margin_top \
