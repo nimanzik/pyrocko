@@ -308,7 +308,7 @@ Scale*.
     def setup_figure_frame(self):
         self.iframe += 1
         self.fframe = self.figure_frame(
-            'Particle Motion (%i)' % self.iframe)
+            'Polarization (%i)' % self.iframe)
 
         self.fframe.gcf().my_disconnect = None
 
