@@ -5,7 +5,12 @@ All notable changes to Pyrocko will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
-*empty*
+
+### Fixed
+- Fix Snuffler crashes on reading invalid files and other IO related errors.
+
+### Changed
+- Removed support for initial marker file format from before August 2011.
 
 ## [2021.04.02]
 
