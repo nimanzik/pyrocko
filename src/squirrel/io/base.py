@@ -24,9 +24,8 @@ backend_modules = [
 logger = logging.getLogger('psq.io')
 
 
-def make_task(*args, **kwargs):
-    kwargs['logger'] = logger
-    return progress.task(*args, **kwargs)
+def make_task(*args):
+    return progress.task(*args, logger=logger)
 
 
 def update_format_providers():
@@ -136,7 +135,8 @@ def iload(
         check=True,
         commit=True,
         skip_unchanged=False,
-        content=g_content_kinds):
+        content=g_content_kinds,
+        show_progress=True):
 
     '''
     Iteratively load content or index/reindex meta-information from files.
@@ -233,7 +233,9 @@ def iload(
     temp_selection = None
     if database:
         if not selection:
-            temp_selection = database.new_selection(paths)
+            temp_selection = database.new_selection(
+                paths, show_progress=show_progress)
+
             selection = temp_selection
 
         if skip_unchanged:
@@ -251,7 +253,7 @@ def iload(
         n_files_total = None
 
     task = None
-    if progress is not None:
+    if show_progress:
         if not kind_ids:
             task = make_task('Indexing files', n_files_total)
         else:

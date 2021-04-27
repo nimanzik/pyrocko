@@ -33,8 +33,8 @@ class Dataset(HasPaths):
 
     def setup(self, squirrel, check=True, progress_viewer='terminal'):
         for source in self.sources:
-            source.setup(
-                squirrel, check=check, progress_viewer=progress_viewer)
+            squirrel.add_source(
+                source, check=check, progress_viewer=progress_viewer)
 
     def get_squirrel(
             self,

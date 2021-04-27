@@ -337,19 +337,19 @@ class Database(object):
         if path is not None:
             yield path, nuts
 
-    def undig_many(self, paths):
-        selection = self.new_selection(paths)
+    def undig_many(self, paths, show_progress=True):
+        selection = self.new_selection(paths, show_progress=show_progress)
 
         for (_, path), nuts in selection.undig_grouped():
             yield path, nuts
 
         del selection
 
-    def new_selection(self, paths=None):
+    def new_selection(self, paths=None, show_progress=True):
         from .selection import Selection
         selection = Selection(self)
         if paths:
-            selection.add(paths)
+            selection.add(paths, show_progress=show_progress)
         return selection
 
     def commit(self):

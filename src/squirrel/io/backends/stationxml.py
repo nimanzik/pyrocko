@@ -137,4 +137,5 @@ def iload(format, file_path, segment, content):
                         inut += 1
 
                     except Exception as e:
-                        logger.warn('Bad instrument response: %s' % str(e))
+                        if 'response' in content:
+                            logger.warn('Bad instrument response: %s' % str(e))

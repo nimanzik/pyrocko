@@ -125,7 +125,7 @@ def squirrel_from_selection_arguments(args):
     datasets = [
         dataset.read_dataset(dataset_path) for dataset_path in args.datasets]
 
-    persistents = [ds.persistent for ds in datasets]
+    persistents = [ds.persistent or '' for ds in datasets if ds.persistent]
     if args.persistent:
         persistent = args.persistent
     elif persistents:
@@ -134,8 +134,12 @@ def squirrel_from_selection_arguments(args):
             raise error.SquirrelError(
                 'Given datasets specify different `persistent` settings.')
 
-        logger.info(
-            'Persistent selection requested by dataset: %s' % persistent)
+        if persistent:
+            logger.info(
+                'Persistent selection requested by dataset: %s' % persistent)
+        else:
+            persistent = None
+
     else:
         persistent = None
 

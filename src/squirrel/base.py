@@ -8,6 +8,8 @@ from __future__ import absolute_import, print_function
 import sys
 import math
 import logging
+import threading
+import queue
 from collections import defaultdict
 
 from pyrocko.guts import Object, Int, List, Tuple, String, Timestamp, Dict
@@ -18,12 +20,16 @@ from . import model, io, cache, dataset
 
 from .model import to_kind_id, separator, WaveformOrder
 from .client import fdsn, catalog
-from .selection import Selection, filldocs, make_task
+from .selection import Selection, filldocs
 from . import client, environment, error
 
 logger = logging.getLogger('psq.base')
 
 guts_prefix = 'squirrel'
+
+
+def make_task(*args):
+    return progress.task(*args, logger=logger)
 
 
 def lpick(condition, seq):
@@ -657,7 +663,7 @@ class Squirrel(Selection):
         self._conn.set_progress_handler(None, 0)
         task.done()
 
-    def add_source(self, source):
+    def add_source(self, source, check=True, progress_viewer='terminal'):
         '''
         Add remote resource.
 
@@ -668,7 +674,7 @@ class Squirrel(Selection):
         '''
 
         self._sources.append(source)
-        source.setup(self)
+        source.setup(self, check=check, progress_viewer=progress_viewer)
 
     def add_fdsn(self, *args, **kwargs):
         '''
@@ -751,9 +757,46 @@ class Squirrel(Selection):
 
         return dict(obj=obj, tmin=tmin, tmax=tmax, time=time, codes=codes)
 
+    def _timerange_sql(self, tmin, tmax, kind, cond, args, naiv):
+
+        tmin_seconds, tmin_offset = model.tsplit(tmin)
+        tmax_seconds, tmax_offset = model.tsplit(tmax)
+        if naiv:
+            cond.append('%(db)s.%(nuts)s.tmin_seconds <= ?')
+            args.append(tmax_seconds)
+        else:
+            tscale_edges = model.tscale_edges
+            tmin_cond = []
+            for kscale in range(tscale_edges.size + 1):
+                if kscale != tscale_edges.size:
+                    tscale = int(tscale_edges[kscale])
+                    tmin_cond.append('''
+                        (%(db)s.%(nuts)s.kind_id = ?
+                         AND %(db)s.%(nuts)s.kscale == ?
+                         AND %(db)s.%(nuts)s.tmin_seconds BETWEEN ? AND ?)
+                    ''')
+                    args.extend(
+                        (to_kind_id(kind), kscale,
+                         tmin_seconds - tscale - 1, tmax_seconds + 1))
+
+                else:
+                    tmin_cond.append('''
+                        (%(db)s.%(nuts)s.kind_id == ?
+                         AND %(db)s.%(nuts)s.kscale == ?
+                         AND %(db)s.%(nuts)s.tmin_seconds <= ?)
+                    ''')
+
+                    args.extend(
+                        (to_kind_id(kind), kscale, tmax_seconds + 1))
+            if tmin_cond:
+                cond.append(' ( ' + ' OR '.join(tmin_cond) + ' ) ')
+
+        cond.append('%(db)s.%(nuts)s.tmax_seconds >= ?')
+        args.append(tmin_seconds)
+
     def iter_nuts(
             self, kind=None, tmin=None, tmax=None, codes=None, naiv=False,
-            kind_codes_ids=None):
+            kind_codes_ids=None, path=None):
 
         '''
         Iterate over content entities matching given constraints.
@@ -819,10 +862,8 @@ class Squirrel(Selection):
 
             return
 
-        extra_cond = []
-        tmin_cond = []
+        cond = []
         args = []
-
         if tmin is not None or tmax is not None:
             assert kind is not None
             if tmin is None:
@@ -830,57 +871,30 @@ class Squirrel(Selection):
             if tmax is None:
                 tmax = self.get_time_span()[1] + 1.0
 
-            tmin_seconds, tmin_offset = model.tsplit(tmin)
-            tmax_seconds, tmax_offset = model.tsplit(tmax)
-            if naiv:
-                extra_cond.append('%(db)s.%(nuts)s.tmin_seconds <= ?')
-                args.append(tmax_seconds)
-            else:
-                tscale_edges = model.tscale_edges
-
-                for kscale in range(tscale_edges.size + 1):
-                    if kscale != tscale_edges.size:
-                        tscale = int(tscale_edges[kscale])
-                        tmin_cond.append('''
-                            (%(db)s.%(nuts)s.kind_id = ?
-                             AND %(db)s.%(nuts)s.kscale == ?
-                             AND %(db)s.%(nuts)s.tmin_seconds BETWEEN ? AND ?)
-                        ''')
-                        args.extend(
-                            (to_kind_id(kind), kscale,
-                             tmin_seconds - tscale - 1, tmax_seconds + 1))
-
-                    else:
-                        tmin_cond.append('''
-                            (%(db)s.%(nuts)s.kind_id == ?
-                             AND %(db)s.%(nuts)s.kscale == ?
-                             AND %(db)s.%(nuts)s.tmin_seconds <= ?)
-                        ''')
-
-                        args.extend(
-                            (to_kind_id(kind), kscale, tmax_seconds + 1))
-
-            extra_cond.append('%(db)s.%(nuts)s.tmax_seconds >= ?')
-            args.append(tmin_seconds)
+            self._timerange_sql(tmin, tmax, kind, cond, args, naiv)
 
         elif kind is not None:
-            extra_cond.append('kind_codes.kind_id == ?')
+            cond.append('kind_codes.kind_id == ?')
             args.append(to_kind_id(kind))
 
         if codes is not None:
             pats = codes_patterns_for_kind(kind, codes)
             if pats:
-                extra_cond.append(
+                cond.append(
                     ' ( %s ) ' % ' OR '.join(
                         ('kind_codes.codes GLOB ?',) * len(pats)))
                 args.extend(separator.join(pat) for pat in pats)
 
         if kind_codes_ids is not None:
-            extra_cond.append(
+            cond.append(
                 ' ( kind_codes.kind_codes_id IN ( %s ) ) ' % ', '.join(
                     '?'*len(kind_codes_ids)))
 
             args.extend(kind_codes_ids)
+
+        if path is not None:
+            cond.append('files.path == ?')
+            args.append(path)
 
         sql = ('''
             SELECT
@@ -903,12 +917,6 @@ class Squirrel(Selection):
             INNER JOIN kind_codes
                 ON %(db)s.%(nuts)s.kind_codes_id == kind_codes.kind_codes_id
             ''')
-
-        cond = []
-        if tmin_cond:
-            cond.append(' ( ' + ' OR '.join(tmin_cond) + ' ) ')
-
-        cond.extend(extra_cond)
 
         if cond:
             sql += ''' WHERE ''' + ' AND '.join(cond)
@@ -951,107 +959,93 @@ class Squirrel(Selection):
         tmin_seconds, tmin_offset = model.tsplit(tmin)
         tmax_seconds, tmax_offset = model.tsplit(tmax)
 
-        tscale_edges = model.tscale_edges
+        names_main_nuts = dict(self._names)
+        names_main_nuts.update(db='main', nuts='nuts')
 
-        tmin_cond = []
-        args = []
-        for kscale in range(tscale_edges.size + 1):
-            if kscale != tscale_edges.size:
-                tscale = int(tscale_edges[kscale])
-                tmin_cond.append('''
-                    (%(db)s.%(nuts)s.kind_id = ?
-                        AND %(db)s.%(nuts)s.kscale == ?
-                        AND %(db)s.%(nuts)s.tmin_seconds BETWEEN ? AND ?)
-                ''')
-                args.extend(
-                    (to_kind_id(kind), kscale,
-                     tmin_seconds - tscale - 1, tmax_seconds + 1))
+        def main_nuts(s):
+            return s % names_main_nuts
 
-            else:
-                tmin_cond.append('''
-                    (%(db)s.%(nuts)s.kind_id == ?
-                        AND %(db)s.%(nuts)s.kscale == ?
-                        AND %(db)s.%(nuts)s.tmin_seconds <= ?)
-                ''')
+        # modify selection and main
+        for sql_subst in [
+                self._sql, main_nuts]:
 
-                args.extend(
-                    (to_kind_id(kind), kscale, tmax_seconds + 1))
+            cond = []
+            args = []
 
-        extra_cond = ['%(db)s.%(nuts)s.tmax_seconds >= ?']
-        args.append(tmin_seconds)
-        if codes is not None:
-            pats = codes_patterns_for_kind(kind, codes)
-            if pats:
-                extra_cond.append(
-                    ' ( %s ) ' % ' OR '.join(
-                        ('kind_codes.codes GLOB ?',) * len(pats)))
-                args.extend(separator.join(pat) for pat in pats)
+            self._timerange_sql(tmin, tmax, kind, cond, args, False)
 
-        if path is not None:
-            extra_cond.append('files.path == ?')
-            args.append(path)
+            if codes is not None:
+                pats = codes_patterns_for_kind(kind, codes)
+                if pats:
+                    cond.append(
+                        ' ( %s ) ' % ' OR '.join(
+                            ('kind_codes.codes GLOB ?',) * len(pats)))
+                    args.extend(separator.join(pat) for pat in pats)
 
-        sql = self._sql('''
-            SELECT
-                %(db)s.%(nuts)s.nut_id,
-                %(db)s.%(nuts)s.tmin_seconds,
-                %(db)s.%(nuts)s.tmin_offset,
-                %(db)s.%(nuts)s.tmax_seconds,
-                %(db)s.%(nuts)s.tmax_offset,
-                kind_codes.deltat
-            FROM files
-            INNER JOIN %(db)s.%(nuts)s
-                ON files.file_id == %(db)s.%(nuts)s.file_id
-            INNER JOIN kind_codes
-                ON %(db)s.%(nuts)s.kind_codes_id == kind_codes.kind_codes_id
-            WHERE ( ''' + ' OR '.join(tmin_cond) + ''' )
-                AND ''' + ' AND '.join(extra_cond))
+            if path is not None:
+                cond.append('files.path == ?')
+                args.append(path)
 
-        insert = []
-        delete = []
-        for row in self._conn.execute(sql, args):
-            nut_id, nut_tmin_seconds, nut_tmin_offset, \
-                nut_tmax_seconds, nut_tmax_offset, nut_deltat = row
-
-            nut_tmin = model.tjoin(
-                nut_tmin_seconds, nut_tmin_offset, nut_deltat)
-            nut_tmax = model.tjoin(
-                nut_tmax_seconds, nut_tmax_offset, nut_deltat)
-
-            if nut_tmin < tmax and tmin < nut_tmax:
-                if nut_tmin < tmin:
-                    insert.append((
-                        nut_tmin_seconds, nut_tmin_offset,
-                        tmin_seconds, tmin_offset,
-                        model.tscale_to_kscale(
-                            tmin_seconds - nut_tmin_seconds),
-                        nut_id))
-
-                if tmax < nut_tmax:
-                    insert.append((
-                        tmax_seconds, tmax_offset,
-                        nut_tmax_seconds, nut_tmax_offset,
-                        model.tscale_to_kscale(
-                            nut_tmax_seconds - tmax_seconds),
-                        nut_id))
-
-                delete.append((nut_id,))
-
-        sql_add = '''
-            INSERT INTO %(db)s.%(nuts)s (
-                    file_id, file_segment, file_element, kind_id,
-                    kind_codes_id, tmin_seconds, tmin_offset,
-                    tmax_seconds, tmax_offset, kscale )
+            sql = sql_subst('''
                 SELECT
-                    file_id, file_segment, file_element,
-                    kind_id, kind_codes_id, ?, ?, ?, ?, ?
-                FROM %(db)s.%(nuts)s
-                WHERE nut_id == ?
-        '''
-        self._conn.executemany(self._sql(sql_add), insert)
+                    %(db)s.%(nuts)s.nut_id,
+                    %(db)s.%(nuts)s.tmin_seconds,
+                    %(db)s.%(nuts)s.tmin_offset,
+                    %(db)s.%(nuts)s.tmax_seconds,
+                    %(db)s.%(nuts)s.tmax_offset,
+                    kind_codes.deltat
+                FROM files
+                INNER JOIN %(db)s.%(nuts)s
+                    ON files.file_id == %(db)s.%(nuts)s.file_id
+                INNER JOIN kind_codes
+                    ON %(db)s.%(nuts)s.kind_codes_id == kind_codes.kind_codes_id
+                WHERE ''' + ' AND '.join(cond))  # noqa
 
-        sql_delete = '''DELETE FROM %(db)s.%(nuts)s WHERE nut_id == ?'''
-        self._conn.executemany(self._sql(sql_delete), delete)
+            insert = []
+            delete = []
+            for row in self._conn.execute(sql, args):
+                nut_id, nut_tmin_seconds, nut_tmin_offset, \
+                    nut_tmax_seconds, nut_tmax_offset, nut_deltat = row
+
+                nut_tmin = model.tjoin(
+                    nut_tmin_seconds, nut_tmin_offset, nut_deltat)
+                nut_tmax = model.tjoin(
+                    nut_tmax_seconds, nut_tmax_offset, nut_deltat)
+
+                if nut_tmin < tmax and tmin < nut_tmax:
+                    if nut_tmin < tmin:
+                        insert.append((
+                            nut_tmin_seconds, nut_tmin_offset,
+                            tmin_seconds, tmin_offset,
+                            model.tscale_to_kscale(
+                                tmin_seconds - nut_tmin_seconds),
+                            nut_id))
+
+                    if tmax < nut_tmax:
+                        insert.append((
+                            tmax_seconds, tmax_offset,
+                            nut_tmax_seconds, nut_tmax_offset,
+                            model.tscale_to_kscale(
+                                nut_tmax_seconds - tmax_seconds),
+                            nut_id))
+
+                    delete.append((nut_id,))
+
+            sql_add = '''
+                INSERT INTO %(db)s.%(nuts)s (
+                        file_id, file_segment, file_element, kind_id,
+                        kind_codes_id, tmin_seconds, tmin_offset,
+                        tmax_seconds, tmax_offset, kscale )
+                    SELECT
+                        file_id, file_segment, file_element,
+                        kind_id, kind_codes_id, ?, ?, ?, ?, ?
+                    FROM %(db)s.%(nuts)s
+                    WHERE nut_id == ?
+            '''
+            self._conn.executemany(sql_subst(sql_add), insert)
+
+            sql_delete = '''DELETE FROM %(db)s.%(nuts)s WHERE nut_id == ?'''
+            self._conn.executemany(sql_subst(sql_delete), delete)
 
     def get_time_span(self, kinds=None):
         '''
@@ -1384,8 +1378,11 @@ class Squirrel(Selection):
         if constraint is None:
             constraint = client.Constraint(**kwargs)
 
+        # TODO
+        print('contraint ignored atm')
+
         for source in self._sources:
-            source.update_waveform_promises(self, constraint)
+            source.update_waveform_promises(self)
 
     def get_nfiles(self):
         '''
@@ -1434,9 +1431,16 @@ class Squirrel(Selection):
             total_size=self.get_total_size(),
             counts=self.get_counts(),
             tmin=tmin,
-            tmax=tmax)
+            tmax=tmax,
+            sources=[s.describe() for s in self._sources])
 
-    def get_content(self, nut, cache_id='default', accessor_id='default'):
+    def get_content(
+            self,
+            nut,
+            cache_id='default',
+            accessor_id='default',
+            show_progress=False):
+
         '''
         Get and possibly load full content for a given index entry from file.
 
@@ -1453,7 +1457,8 @@ class Squirrel(Selection):
                     nut.file_path,
                     segment=nut.file_segment,
                     format=nut.file_format,
-                    database=self._database):
+                    database=self._database,
+                    show_progress=show_progress):
 
                 content_cache.put(nut_loaded)
 
@@ -1727,13 +1732,16 @@ class Squirrel(Selection):
             order_group.sort(
                 key=lambda order: source_priority[order.source_id])
 
+        n_order_groups = len(order_groups)
+
         if len(order_groups) != 0 or len(orders) != 0:
             logger.info(
                 'Waveform orders standing for download: %i (%i)'
                 % (len(order_groups), len(orders)))
 
-        def release_order_group(order):
-            del order_groups[order_key(order)]
+            task = make_task('Waveform orders processed', n_order_groups)
+        else:
+            task = None
 
         def split_promise(order):
             self._split_nuts(
@@ -1742,6 +1750,16 @@ class Squirrel(Selection):
                 codes=order.codes,
                 path=order.source_id)
 
+        def release_order_group(order):
+            okey = order_key(order)
+            for followup in order_groups[okey]:
+                split_promise(followup)
+
+            del order_groups[okey]
+
+            if task:
+                task.update(n_order_groups - len(order_groups))
+
         def noop(order):
             pass
 
@@ -1749,10 +1767,22 @@ class Squirrel(Selection):
             release_order_group(order)
             split_promise(order)
 
+        def batch_add(paths):
+            self.add(paths)
+
+        calls = queue.Queue()
+
+        def enqueue(f):
+            def wrapper(*args):
+                calls.put((f, args))
+
+            return wrapper
+
         for order in orders_noop:
             split_promise(order)
 
         while order_groups:
+
             orders_now = []
             empty = []
             for k, order_group in order_groups.items():
@@ -1768,13 +1798,40 @@ class Squirrel(Selection):
             for order in orders_now:
                 by_source_id[order.source_id].append(order)
 
-            # TODO: parallelize this loop
+            threads = []
             for source_id in by_source_id:
-                sources[source_id].download_waveforms(
-                    self, by_source_id[source_id],
-                    success=success,
-                    error_permanent=split_promise,
-                    error_temporary=noop)
+                def download():
+                    try:
+                        sources[source_id].download_waveforms(
+                            by_source_id[source_id],
+                            success=enqueue(success),
+                            error_permanent=enqueue(split_promise),
+                            error_temporary=noop,
+                            batch_add=enqueue(batch_add))
+
+                    finally:
+                        calls.put(None)
+
+                thread = threading.Thread(target=download)
+                thread.start()
+                threads.append(thread)
+
+            ndone = 0
+            while ndone < len(threads):
+                ret = calls.get()
+                if ret is None:
+                    ndone += 1
+                else:
+                    ret[0](*ret[1])
+
+            for thread in threads:
+                thread.join()
+
+            if task:
+                task.update(n_order_groups - len(order_groups))
+
+        if task:
+            task.done()
 
     @filldocs
     def get_waveform_nuts(
@@ -2012,7 +2069,9 @@ class Squirrel(Selection):
             ['waveform', 'waveform_promise'])
 
         if None in (self_tmin, self_tmax):
-            logger.warning('Content has undefined time span. No waveforms?')
+            logger.warning(
+                'Content has undefined time span. No waveforms and no '
+                'waveform promises?')
             return
 
         tmin = tmin if tmin is not None else self_tmin + tpad
@@ -2402,6 +2461,10 @@ class SquirrelStats(Object):
         optional=True,
         help='Latest end time of all nuts in selection.')
 
+    sources = List.T(
+        String.T(),
+        help='Descriptions of attached sources.')
+
     def __str__(self):
         kind_counts = dict(
             (kind, sum(self.counts[kind].values())) for kind in self.kinds)
@@ -2419,20 +2482,24 @@ class SquirrelStats(Object):
         stmin = util.tts(self.tmin) if self.tmin is not None else '<none>'
         stmax = util.tts(self.tmax) if self.tmax is not None else '<none>'
 
+        ssources = '\n'.join(
+            '                                 ' + s for s in self.sources)
+
         s = '''
 Available codes:               %s
 Number of files:               %i
 Total size of known files:     %s
 Number of index nuts:          %i
 Available content kinds:       %s
-Time span of indexed contents: %s - %s''' % (
+Time span of indexed contents: %s - %s
+Sources:                       %s''' % (
             scodes,
             self.nfiles,
             util.human_bytesize(self.total_size),
             self.nnuts,
             ', '.join('%s: %i' % (
                 kind, kind_counts[kind]) for kind in sorted(self.kinds)),
-            stmin, stmax)
+            stmin, stmax, ssources)
 
         return s
 

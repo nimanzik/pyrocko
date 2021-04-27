@@ -24,6 +24,7 @@ from pyrocko.client import fdsn
 from pyrocko import util, trace, io
 from pyrocko.io_common import FileLoadError
 from pyrocko.io import stationxml
+from pyrocko.progress import progress
 
 from pyrocko.guts import Object, String, Timestamp, List, Tuple, Int, Dict, \
     Duration, Bool
@@ -37,6 +38,10 @@ logger = logging.getLogger('psq.client.fdsn')
 sites_not_supporting = {
     'startbefore': ['geonet'],
     'includerestricted': ['geonet']}
+
+
+def make_task(*args):
+    return progress.task(*args, logger=logger)
 
 
 def plural_s(x):
@@ -259,6 +264,9 @@ class FDSNSource(Source):
         self._source_id = 'client:fdsn:%s' % self._hash
         self._error_infos = []
 
+    def describe(self):
+        return self._source_id
+
     def make_hash(self):
         s = self.site
         s += 'notoken' \
@@ -316,6 +324,13 @@ class FDSNSource(Source):
             self._get_waveforms_path(),
             check=check,
             progress_viewer=progress_viewer)
+
+        fn = self._get_channels_path()
+        if os.path.exists(fn):
+            squirrel.add(fn)
+
+        squirrel.add_virtual(
+            [], virtual_paths=[self._source_id])
 
     def _get_constraint_path(self):
         return op.join(self._cache_path, self._hash, 'constraint.pickle')
@@ -439,7 +454,7 @@ class FDSNSource(Source):
             return channel_sx
 
         except fdsn.EmptyResult:
-            return stationxml.FDSNStationXML(source='dummy-emtpy-result')
+            return stationxml.FDSNStationXML(source='dummy-empty-result')
 
     def _load_constraint(self):
         fn = self._get_constraint_path()
@@ -465,17 +480,9 @@ class FDSNSource(Source):
         except OSError:
             return 0.0
 
-    def update_waveform_promises(self, squirrel, constraint):
-        from pyrocko.squirrel import Squirrel
-
-        # get meta information of stuff available through this source
-        sub_squirrel = Squirrel(database=squirrel.get_database())
-        fn = self._get_channels_path()
-        if os.path.exists(fn):
-            sub_squirrel.add([fn], check=False)
-
-        nuts = sub_squirrel.iter_nuts(
-            'channel', constraint.tmin, constraint.tmax)
+    def update_waveform_promises(self, squirrel):
+        cpath = os.path.abspath(self._get_channels_path())
+        nuts = squirrel.iter_nuts('channel', path=cpath)
 
         path = self._source_id
         squirrel.add_virtual(
@@ -495,12 +502,16 @@ class FDSNSource(Source):
         return d
 
     def download_waveforms(
-            self, squirrel, orders, success, error_permanent, error_temporary):
+            self, orders, success, batch_add, error_permanent,
+            error_temporary):
 
         elog = ErrorLog(site=self.site)
         orders.sort(key=orders_sort_key)
         neach = 20
         i = 0
+        task = make_task(
+            'FDSN "%s" waveforms: downloading' % self.site, len(orders))
+
         while i < len(orders):
             orders_now = orders[i:i+neach]
             selection_now = orders_to_selection(orders_now)
@@ -510,6 +521,7 @@ class FDSNSource(Source):
             self._log_info_data(
                 'downloading, %s' % order_summary(orders_now))
 
+            all_paths = []
             with tempfile.NamedTemporaryFile() as f:
                 try:
                     data = fdsn.dataselect(
@@ -565,7 +577,8 @@ class FDSNSource(Source):
                                     elog.append(now, order, 'partial result')
 
                             paths = self._archive.add(trs_order)
-                            squirrel.add(paths)
+                            all_paths.extend(paths)
+
                             nsuccess += 1
                             success(order)
 
@@ -586,10 +599,16 @@ class FDSNSource(Source):
                 '%i download%s successful' % (nsuccess, plural_s(nsuccess))
                 + (', %s' % emessage if emessage else ''))
 
+            if all_paths:
+                batch_add(all_paths)
+
             i += neach
+            task.update(i)
 
         for agg in elog.iter_aggregates():
             logger.warn(str(agg))
+
+        task.done()
 
 
 __all__ = [
