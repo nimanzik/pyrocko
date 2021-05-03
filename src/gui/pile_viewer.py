@@ -1786,8 +1786,7 @@ def MakePileViewerMainClass(base):
         def add_markers(self, markers):
             len_before = len(self.markers)
             for m in markers:
-                if m not in self.markers:
-                    self.markers.append(m)
+                self.markers.append(m)
             self.markers_added.emit(
                 len_before, len(self.markers)-1)
 
@@ -1929,8 +1928,8 @@ def MakePileViewerMainClass(base):
                 if marker.kind not in self.visible_marker_kinds:
                     continue
 
-                if (abs(mouset-marker.get_tmin()) < deltat or
-                        abs(mouset-marker.get_tmax()) < deltat):
+                if (abs(mouset-marker.tmin) < deltat or
+                        abs(mouset-marker.tmax) < deltat):
 
                     if relevant_nslc_ids is None:
                         relevant_nslc_ids = self.nslc_ids_under_cursor(x, y)
@@ -1953,8 +1952,8 @@ def MakePileViewerMainClass(base):
                 if marker.kind not in self.visible_marker_kinds:
                     continue
 
-                state = abs(mouset-marker.get_tmin()) < deltat or \
-                    abs(mouset-marker.get_tmax()) < deltat and not haveone
+                state = abs(mouset-marker.tmin) < deltat or \
+                    abs(mouset-marker.tmax) < deltat and not haveone
 
                 if state:
                     xstate = False
@@ -2158,8 +2157,8 @@ def MakePileViewerMainClass(base):
 
             elif keytext == 'a':
                 for marker in self.markers:
-                    if ((self.tmin <= marker.get_tmin() <= self.tmax or
-                            self.tmin <= marker.get_tmax() <= self.tmax) and
+                    if ((self.tmin <= marker.tmin <= self.tmax or
+                            self.tmin <= marker.tmax <= self.tmax) and
                             marker.kind in self.visible_marker_kinds):
                         marker.set_selected(True)
                     else:
@@ -2789,11 +2788,10 @@ def MakePileViewerMainClass(base):
 
         def draw_visible_markers(self, markers, p, vcenter_projection):
             """Draw non-overlapping ``markers``."""
-            markers = [x for x in self.markers if (
-                x.get_tmin() < self.tmax and self.tmin < x.get_tmax())]
-
             markers = [
-                x for x in markers if x.kind in self.visible_marker_kinds]
+                x for x in self.markers
+                if x.tmin < self.tmax and self.tmin < x.tmax
+                and x.kind in self.visible_marker_kinds]
 
             if len(markers) > 500:
                 i_labels, i_markers = self.tobedrawn(
@@ -3142,13 +3140,12 @@ def MakePileViewerMainClass(base):
                                 self.time_projection, trace_projection, 1.0)
 
                         for marker in self.markers:
-                            if marker.get_tmin() < self.tmax \
-                                    and self.tmin < marker.get_tmax():
-
-                                if marker.kind in self.visible_marker_kinds:
-                                    marker.draw_trace(
-                                        self, p, trace, self.time_projection,
-                                        trace_projection, 1.0)
+                            if marker.tmin < self.tmax \
+                                    and self.tmin < marker.tmax \
+                                    and marker.kind in self.visible_marker_kinds:
+                                marker.draw_trace(
+                                    self, p, trace, self.time_projection,
+                                    trace_projection, 1.0)
 
                         p.setPen(primary_pen)
 
