@@ -18,7 +18,8 @@ except ImportError:
 import os.path as op
 from .base import Source, Constraint
 from ..model import make_waveform_promise_nut, ehash, InvalidWaveform, \
-    order_summary, WaveformOrder
+    order_summary, WaveformOrder, g_tmin, g_tmax, codes_to_str_abbreviated
+from ..database import ExecuteGet1Error
 from pyrocko.client import fdsn
 
 from pyrocko import util, trace, io
@@ -69,6 +70,22 @@ def diff(fn_a, fn_b):
 
                 if len(a) == 0 or len(b) == 0:
                     return False
+
+
+def move_or_keep(fn_temp, fn):
+    if op.exists(fn):
+        if diff(fn, fn_temp):
+            os.rename(fn_temp, fn)
+            status = 'updated'
+        else:
+            os.unlink(fn_temp)
+            status = 'upstream unchanged'
+
+    else:
+        os.rename(fn_temp, fn)
+        status = 'new'
+
+    return status
 
 
 class Archive(Object):
@@ -332,11 +349,24 @@ class FDSNSource(Source):
         squirrel.add_virtual(
             [], virtual_paths=[self._source_id])
 
+        responses_path = self._get_responses_path()
+        squirrel.add(responses_path, kinds=['response'])
+
     def _get_constraint_path(self):
         return op.join(self._cache_path, self._hash, 'constraint.pickle')
 
     def _get_channels_path(self):
         return op.join(self._cache_path, self._hash, 'channels.stationxml')
+
+    def _get_responses_path(self, nslc=None):
+        dirpath = op.join(
+            self._cache_path, self._hash, 'responses')
+
+        if nslc is None:
+            return dirpath
+        else:
+            return op.join(
+                dirpath, 'response_%s_%s_%s_%s.stationxml' % nslc)
 
     def _get_waveforms_path(self):
         if self.shared_waveforms:
@@ -348,12 +378,15 @@ class FDSNSource(Source):
         log_prefix = 'FDSN "%s" metadata:' % self.site
         target(' '.join((log_prefix, message)))
 
+    def _log_responses(self, message, target=logger.info):
+        log_prefix = 'FDSN "%s" responses:' % self.site
+        target(' '.join((log_prefix, message)))
+
     def _log_info_data(self, *args):
         log_prefix = 'FDSN "%s" waveforms:' % self.site
         logger.info(' '.join((log_prefix,) + args))
 
-    def _str_expires(self, now):
-        t = self._get_expiration_time()
+    def _str_expires(self, t, now):
         if t is None:
             return 'expires: never'
         else:
@@ -366,14 +399,14 @@ class FDSNSource(Source):
         if constraint is None:
             constraint = Constraint()
 
-        expiration_time = self._get_expiration_time()
+        expiration_time = self._get_channels_expiration_time()
         now = time.time()
 
         log_target = logger.info
         if self._constraint and self._constraint.contains(constraint) \
                 and (expiration_time is None or now < expiration_time):
 
-            s_case = 'using cached'
+            status = 'using cached'
 
         else:
             if self._constraint:
@@ -391,28 +424,21 @@ class FDSNSource(Source):
                 fn_temp = fn + '.%i.temp' % os.getpid()
                 channel_sx.dump_xml(filename=fn_temp)
 
-                if op.exists(fn):
-                    if diff(fn, fn_temp):
-                        os.rename(fn_temp, fn)
-                        s_case = 'updated'
-                    else:
-                        os.unlink(fn_temp)
-                        squirrel.get_database().silent_touch(fn)
-                        s_case = 'upstream unchanged'
+                status = move_or_keep(fn_temp, fn)
 
-                else:
-                    os.rename(fn_temp, fn)
-                    s_case = 'new'
+                if status == 'upstream unchanged':
+                    squirrel.get_database().silent_touch(fn)
 
                 self._constraint = constraint
                 self._dump_constraint()
 
             except OSError as e:
-                s_case = 'update failed (%s)' % str(e)
+                status = 'update failed (%s)' % str(e)
                 log_target = logger.error
 
+        expiration_time = self._get_channels_expiration_time()
         self._log_meta(
-            '%s (%s)' % (s_case, self._str_expires(now)),
+            '%s (%s)' % (status, self._str_expires(expiration_time, now)),
             target=log_target)
 
         fn = self._get_channels_path()
@@ -468,17 +494,19 @@ class FDSNSource(Source):
         with open(self._get_constraint_path(), 'wb') as f:
             pickle.dump(self._constraint, f, protocol=2)
 
-    def _get_expiration_time(self):
+    def _get_expiration_time(self, path):
         if self.expires is None:
             return None
 
         try:
-            path = self._get_channels_path()
             t = os.stat(path)[8]
             return t + self.expires
 
         except OSError:
             return 0.0
+
+    def _get_channels_expiration_time(self):
+        return self._get_expiration_time(self._get_channels_path())
 
     def update_waveform_promises(self, squirrel):
         cpath = os.path.abspath(self._get_channels_path())
@@ -609,6 +637,110 @@ class FDSNSource(Source):
             logger.warn(str(agg))
 
         task.done()
+
+    def _do_response_query(self, selection):
+        extra_args = {}
+
+        if self.site not in sites_not_supporting['includerestricted']:
+            extra_args.update(
+                includerestricted=(
+                    self.user_credentials is not None
+                    or self.auth_token is not None))
+
+        self._log_responses('querying...')
+
+        try:
+            response_sx = fdsn.station(
+                site=self.site,
+                level='response',
+                selection=selection,
+                **extra_args)
+
+            return response_sx
+
+        except fdsn.EmptyResult:
+            return stationxml.FDSNStationXML(source='dummy-empty-result')
+
+    def update_response_inventory(self, squirrel, constraint):
+        cpath = os.path.abspath(self._get_channels_path())
+        nuts = squirrel.iter_nuts('channel', path=cpath)
+
+        tmin = g_tmin
+        tmax = g_tmax
+
+        selection = []
+        now = time.time()
+        have = set()
+        status = defaultdict(list)
+        for nut in nuts:
+            nslc = nut.codes_tuple[1:5]
+            if nslc in have:
+                continue
+            have.add(nslc)
+
+            fn = self._get_responses_path(nslc)
+            expiration_time = self._get_expiration_time(fn)
+            if os.path.exists(fn) \
+                    and (expiration_time is None or now < expiration_time):
+                status['using cached'].append(nslc)
+            else:
+                selection.append(nslc + (tmin, tmax))
+
+        dummy = stationxml.FDSNStationXML(source='dummy-empty')
+        neach = 100
+        i = 0
+        fns = []
+        while i < len(selection):
+            selection_now = selection[i:i+neach]
+            i += neach
+
+            try:
+                sx = self._do_response_query(selection_now)
+            except Exception as e:
+                status['update failed (%s)' % str(e)].extend(
+                    entry[:4] for entry in selection_now)
+                continue
+
+            sx.created = None  # timestamp would ruin diff
+
+            by_nslc = dict(stationxml.split_channels(sx))
+
+            for entry in selection_now:
+                nslc = entry[:4]
+                response_sx = by_nslc.get(nslc, dummy)
+                try:
+                    fn = self._get_responses_path(nslc)
+                    fn_temp = fn + '.%i.temp' % os.getpid()
+
+                    util.ensuredirs(fn_temp)
+                    response_sx.dump_xml(filename=fn_temp)
+
+                    status_this = move_or_keep(fn_temp, fn)
+
+                    if status_this == 'upstream unchanged':
+                        try:
+                            squirrel.get_database().silent_touch(fn)
+                        except ExecuteGet1Error:
+                            pass
+
+                    status[status_this].append(nslc)
+                    fns.append(fn)
+
+                except OSError as e:
+                    status['update failed (%s)' % str(e)].append(nslc)
+
+        for k in sorted(status):
+            if k.find('failed') != -1:
+                log_target = logger.error
+            else:
+                log_target = logger.info
+
+            self._log_responses(
+                '%s: %s' % (
+                    k, codes_to_str_abbreviated(status[k])),
+                target=log_target)
+
+        squirrel.add(fns, kinds=['response'])
 
 
 __all__ = [

@@ -1384,6 +1384,15 @@ class Squirrel(Selection):
         for source in self._sources:
             source.update_waveform_promises(self)
 
+    def update_responses(self, constraint=None, **kwargs):
+        # TODO
+        if constraint is None:
+            constraint = client.Constraint(**kwargs)
+
+        print('contraint ignored atm')
+        for source in self._sources:
+            source.update_response_inventory(self, constraint)
+
     def get_nfiles(self):
         '''
         Get number of files in selection.
@@ -1421,17 +1430,19 @@ class Squirrel(Selection):
         Get statistics on contents available through this selection.
         '''
 
-        tmin, tmax = self.get_time_span()
+        kinds = self.get_kinds()
+        time_spans = {}
+        for kind in kinds:
+            time_spans[kind] = self.get_time_span([kind])
 
         return SquirrelStats(
             nfiles=self.get_nfiles(),
             nnuts=self.get_nnuts(),
-            kinds=self.get_kinds(),
+            kinds=kinds,
             codes=self.get_codes(),
             total_size=self.get_total_size(),
             counts=self.get_counts(),
-            tmin=tmin,
-            tmax=tmax,
+            time_spans=time_spans,
             sources=[s.describe() for s in self._sources])
 
     def get_content(
@@ -2454,13 +2465,9 @@ class SquirrelStats(Object):
         String.T(), Dict.T(Tuple.T(content_t=String.T()), Int.T()),
         help='Breakdown of how many nuts of any content type and code '
              'sequence are available in selection, ``counts[kind][codes]``.')
-    tmin = Timestamp.T(
-        optional=True,
-        help='Earliest start time of all nuts in selection.')
-    tmax = Timestamp.T(
-        optional=True,
-        help='Latest end time of all nuts in selection.')
-
+    time_spans = Dict.T(
+        String.T(), Tuple.T(content_t=Timestamp.T()),
+        help='Time spans by content type.')
     sources = List.T(
         String.T(),
         help='Descriptions of attached sources.')
@@ -2469,39 +2476,44 @@ class SquirrelStats(Object):
         kind_counts = dict(
             (kind, sum(self.counts[kind].values())) for kind in self.kinds)
 
-        codes = ['.'.join(x) for x in self.codes]
+        scodes = model.codes_to_str_abbreviated(self.codes)
 
-        if len(codes) > 20:
-            scodes = '\n' + util.ewrap(codes[:10], indent='  ') \
-                + '\n  [%i more]\n' % (len(codes) - 20) \
-                + util.ewrap(codes[-10:], indent='  ')
-        else:
-            scodes = '\n' + util.ewrap(codes, indent='  ') \
-                if codes else '<none>'
+        ssources = '<none>' if not self.sources else '\n' + '\n'.join(
+            '  ' + s for s in self.sources)
 
-        stmin = util.tts(self.tmin) if self.tmin is not None else '<none>'
-        stmax = util.tts(self.tmax) if self.tmax is not None else '<none>'
+        def stime(t):
+            return util.tts(t) if t is not None and t not in (
+                model.g_tmin, model.g_tmax) else '<none>'
 
-        ssources = '\n'.join(
-            '                                 ' + s for s in self.sources)
+        def stable(rows):
+            ns = [max(len(w) for w in col) for col in zip(*rows)]
+            return '\n'.join(
+                ' '.join(w.ljust(n) for n, w in zip(ns, row))
+                for row in rows)
+
+        def indent(s):
+            return '\n'.join('  '+line for line in s.splitlines())
+
+        stspans = '<none>' if not self.kinds else '\n' + indent(stable([(
+            kind + ':',
+            str(kind_counts[kind]),
+            stime(self.time_spans[kind][0]),
+            '-',
+            stime(self.time_spans[kind][1])) for kind in sorted(self.kinds)]))
 
         s = '''
-Available codes:               %s
 Number of files:               %i
 Total size of known files:     %s
 Number of index nuts:          %i
 Available content kinds:       %s
-Time span of indexed contents: %s - %s
+Available codes:               %s
 Sources:                       %s''' % (
-            scodes,
             self.nfiles,
             util.human_bytesize(self.total_size),
             self.nnuts,
-            ', '.join('%s: %i' % (
-                kind, kind_counts[kind]) for kind in sorted(self.kinds)),
-            stmin, stmax, ssources)
+            stspans, scodes, ssources)
 
-        return s
+        return s.lstrip()
 
 
 __all__ = [

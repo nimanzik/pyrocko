@@ -121,6 +121,20 @@ def time_or_none_to_str(x):
         return util.time_to_str(x)
 
 
+def codes_to_str_abbreviated(codes, indent='  '):
+    codes = ['.'.join(x) for x in codes]
+
+    if len(codes) > 20:
+        scodes = '\n' + util.ewrap(codes[:10], indent=indent) \
+            + '\n%s[%i more]\n' % (indent, len(codes) - 20) \
+            + util.ewrap(codes[-10:], indent='  ')
+    else:
+        scodes = '\n' + util.ewrap(codes, indent=indent) \
+            if codes else '<none>'
+
+    return scodes
+
+
 g_offset_time_unit_inv = 1000000000
 g_offset_time_unit = 1.0 / g_offset_time_unit_inv
 

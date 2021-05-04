@@ -1221,6 +1221,8 @@ class Duration(Object):
                 else:
                     return float(val)
 
+            return val
+
 
 re_tz = re.compile(r'(Z|([+-][0-2][0-9])(:?([0-5][0-9]))?)$')
 

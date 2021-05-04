@@ -16,14 +16,23 @@ from pyrocko import util
 from pyrocko.guts import Object, Int, List, Dict, Tuple, String
 from . import error, io
 from .model import Nut, to_kind_id, to_kind, separator
+from .error import SquirrelError
 
 logger = logging.getLogger('psq.database')
 
 guts_prefix = 'squirrel'
 
 
+class ExecuteGet1Error(SquirrelError):
+    pass
+
+
 def execute_get1(connection, sql, args):
-    return list(connection.execute(sql, args))[0]
+    rows = list(connection.execute(sql, args))
+    if len(rows) == 1:
+        return rows[0]
+    else:
+        raise ExecuteGet1Error('Expected database entry not found.')
 
 
 g_databases = {}

@@ -5,8 +5,12 @@
 
 from __future__ import absolute_import, print_function
 
+import logging
+
 from .. import common
 from pyrocko.squirrel.error import SquirrelError
+
+logger = logging.getLogger('psq.cli.update')
 
 
 def setup(subparsers):
@@ -24,6 +28,13 @@ def setup(subparsers):
         default=False,
         help='Update waveform promises.')
 
+    p.add_argument(
+        '--responses',
+        action='store_true',
+        dest='responses',
+        default=False,
+        help='Update responses.')
+
     return p
 
 
@@ -38,4 +49,10 @@ def call(parser, args):
     if args.promises:
         squirrel.update_waveform_promises()
 
-    print(squirrel)
+    if args.responses:
+        squirrel.update_responses()
+
+    stats = str(squirrel)
+    stats = '\n'.join('  ' + s for s in stats.splitlines())
+
+    logger.info('Squirrel stats:\n%s' % stats)

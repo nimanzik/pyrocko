@@ -6,10 +6,13 @@
 from __future__ import absolute_import, print_function
 
 import math
+import logging
 
 from .. import common
 from pyrocko.squirrel.error import SquirrelError
 from pyrocko.progress import progress
+
+logger = logging.getLogger('psq.cli.update')
 
 
 def setup(subparsers):
@@ -44,3 +47,8 @@ def call(parser, args):
             task.update(iwindow)
 
         task.done()
+
+    stats = str(squirrel)
+    stats = '\n'.join('  ' + s for s in stats.splitlines())
+
+    logger.info('Squirrel stats:\n%s' % stats)

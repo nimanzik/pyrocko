@@ -2089,6 +2089,46 @@ def primitive_merge(sxs):
             sorted(networks, key=lambda x: x.code)))
 
 
+def split_channels(sx):
+
+    sx = copy.deepcopy(sx)
+
+    def lc(channel):
+        return channel.location_code, channel.code
+
+    nslc = None
+    network_list = sx.network_list
+    for network in sorted(network_list, key=lambda network: network.code):
+
+        if nslc is None or nslc[0] != network.code:
+            sx.network_list = [network]
+        else:
+            sx.network_list.append(network)
+
+        station_list = network.station_list
+        for station in sorted(station_list, key=lambda station: station.code):
+            if nslc is None or nslc[:2] != (network.code, station.code):
+                network.station_list = [station]
+            else:
+                network.station_list.append(station)
+
+            channel_list = station.channel_list
+            for channel in sorted(channel_list, key=lc):
+                this_nslc = (network.code, station.code) + lc(channel)
+                if nslc is None or nslc != this_nslc:
+                    if nslc is not None:
+                        yield nslc, copy.deepcopy(sx)
+
+                    station.channel_list = [channel]
+                else:
+                    station.channel_list.append(channel)
+
+                nslc = this_nslc
+
+    if nslc is not None:
+        yield nslc, copy.deepcopy(sx)
+
+
 if __name__ == '__main__':
     from optparse import OptionParser
 
