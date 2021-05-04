@@ -717,8 +717,11 @@ def MakePileViewerMainClass(base):
         pile_has_changed_signal = qc.pyqtSignal()
         tracks_range_changed = qc.pyqtSignal(int, int, int)
 
-        markers_added = qc.pyqtSignal(int, int)
-        markers_removed = qc.pyqtSignal(int, int)
+        begin_markers_add = qc.pyqtSignal(int, int)
+        end_markers_add = qc.pyqtSignal()
+        begin_markers_remove = qc.pyqtSignal(int, int)
+        end_markers_remove = qc.pyqtSignal()
+
         changed_marker_selection = qc.pyqtSignal(list)
         active_event_marker_changed = qc.pyqtSignal(int)
 
@@ -752,7 +755,8 @@ def MakePileViewerMainClass(base):
             self.picking_down = None
             self.picking = None
             self.floating_marker = None
-            self.markers = []
+            self.markers = pyrocko.pile.Sorted([], 'tmin')
+            self.markers_deltat_max = 0.
             self.all_marker_kinds = (0, 1, 2, 3, 4, 5)
             self.visible_marker_kinds = self.all_marker_kinds
             self.active_event_marker = None
@@ -1733,7 +1737,7 @@ def MakePileViewerMainClass(base):
                     self, caption, options=qfiledialog_options))
             if fn:
                 Marker.save_markers(
-                    sorted(self.markers, key=lambda m: m.tmin), fn,
+                    self.markers, fn,
                     fdigits=self.time_fractional_digits())
 
         def write_selected_markers(self, fn=None):
@@ -1743,7 +1747,7 @@ def MakePileViewerMainClass(base):
                     self, caption, options=qfiledialog_options))
             if fn:
                 Marker.save_markers(
-                    sorted(self.selected_markers(), key=lambda m: m.tmin), fn,
+                    self.iter_selected_markers(), fn,
                     fdigits=self.time_fractional_digits())
 
         def read_events(self, fn=None):
@@ -1778,60 +1782,68 @@ def MakePileViewerMainClass(base):
             associate_phases_to_events(self.markers)
 
         def add_marker(self, marker):
-            if marker not in self.markers:
-                self.markers.append(marker)
-                self.markers_added.emit(
-                    len(self.markers)-1, len(self.markers)-1)
+            # need index to inform QAbstactTableModel about upcoming change,
+            # but have to restore current state in order to not cause problems
+            self.markers.insert(marker)
+            i = self.markers.remove(marker)
+
+            self.begin_markers_add.emit(i, i)
+            self.markers.insert(marker)
+            self.end_markers_add.emit()
+            self.markers_deltat_max = max(
+                self.markers_deltat_max, marker.tmax - marker.tmin)
 
         def add_markers(self, markers):
-            len_before = len(self.markers)
-            for m in markers:
-                self.markers.append(m)
-            self.markers_added.emit(
-                len_before, len(self.markers)-1)
+            print('< add_markers')
+            if not self.markers:
+                self.begin_markers_add.emit(0, len(markers) - 1)
+                self.markers.insert_many(markers)
+                self.end_markers_add.emit()
+                self.update_markers_deltat_max()
+            else:
+                for marker in markers:
+                    self.add_marker(marker)
+            print('> add_markers')
+
+        def update_markers_deltat_max(self):
+            self.markers_deltat_max = max(
+                marker.tmax - marker.tmin for marker in self.markers)
 
         def remove_marker(self, marker):
-            '''Remove a ``marker`` from the :py:class:`PileViewer`.
+            '''
+            Remove a ``marker`` from the :py:class:`PileViewer`.
 
-            :param marker: :py:class:`Marker` (or subclass) instance'''
+            :param marker: :py:class:`Marker` (or subclass) instance
+            '''
+
             if marker is self.active_event_marker:
                 self.deactivate_event_marker()
 
-            indx = self.markers.index(marker)
-            self.remove_marker_from_menu(indx, indx)
-            self.markers.remove(marker)
+            i = self.markers.index(marker)
+            self.begin_markers_remove.emit(i, i)
+            self.markers.remove_at(i)
+            self.end_markers_remove.emit()
 
         def remove_markers(self, markers):
-            '''Remove a list of ``markers`` from the :py:class:`PileViewer`.
+            '''
+            Remove a list of ``markers`` from the :py:class:`PileViewer`.
 
             :param markers: list of :py:class:`Marker` (or subclass)
-                            instances'''
-            try:
-                indxs = sorted(
-                    list(set([self.markers.index(m) for m in markers])))
-            except ValueError:
-                return
+                            instances
+            '''
 
-            if self.get_active_event_marker():
-                iactive = self.markers.index(self.active_event_marker)
-                if iactive in indxs:
-                    self.deactivate_event_marker()
+            for marker in markers:
+                self.remove_marker(marker)
 
-            chunks = make_chunks(indxs)
-            for chunk in chunks[::-1]:
-                istart, istop = min(chunk), max(chunk)
-                self.remove_marker_from_menu(istart, istop)
-                for i_m in chunk[::-1]:
-                    self.markers.pop(i_m)
-
-        def remove_marker_from_menu(self, istart, istop):
-            self.markers_removed.emit(istart, istop)
-
-        def set_markers(self, markers):
-            self.markers = markers
+            self.update_markers_deltat_max()
 
         def selected_markers(self):
             return [marker for marker in self.markers if marker.is_selected()]
+
+        def iter_selected_markers(self):
+            for marker in self.markers:
+                if marker.is_selected():
+                    yield marker
 
         def get_markers(self):
             return self.markers
@@ -2287,16 +2299,21 @@ def MakePileViewerMainClass(base):
             self.emit_selected_markers()
 
         def emit_selected_markers(self):
-            _indexes = []
-            selected_markers = self.selected_markers()
-            markers = self.get_markers()
-            for sm in selected_markers:
-                if sm in markers:
-                    _indexes.append(markers.index(sm))
+            ibounds = []
+            last_selected = False
+            for imarker, marker in enumerate(self.markers):
+                this_selected = marker.is_selected()
+                if this_selected != last_selected:
+                    ibounds.append(imarker)
 
-            _indexes.sort()
-            _indexes = make_chunks(_indexes)
-            self.changed_marker_selection.emit(_indexes)
+                last_selected = this_selected
+
+            if last_selected:
+                ibounds.append(len(self.markers))
+
+            chunks = list(zip(ibounds[::2], ibounds[1::2]))
+            print(chunks)
+            self.changed_marker_selection.emit(chunks)
 
         def toggle_marker_editor(self):
             self.panel_parent.toggle_marker_editor()
@@ -2786,31 +2803,35 @@ def MakePileViewerMainClass(base):
 
             return i_labels, indx
 
-        def draw_visible_markers(self, markers, p, vcenter_projection):
-            """Draw non-overlapping ``markers``."""
-            markers = [
-                x for x in self.markers
-                if x.tmin < self.tmax and self.tmin < x.tmax
-                and x.kind in self.visible_marker_kinds]
+        def draw_visible_markers(
+                self, p, vcenter_projection, primary_pen):
 
-            if len(markers) > 500:
-                i_labels, i_markers = self.tobedrawn(
-                    markers, self.time_projection.get_out_range())
+            try:
+                markers = self.markers.with_key_in_limited(
+                    self.tmin - self.markers_deltat_max, self.tmax, 1000)
 
-                if len(i_markers) != 0:
-                    for i_m in i_markers:
-                        if i_m in i_labels:
-                            with_label = True
-                        else:
-                            with_label = False
-                        markers[i_m].draw(p,
-                                          self.time_projection,
-                                          vcenter_projection,
-                                          with_label=with_label)
-            else:
-                for m in markers:
-                    m.draw(p, self.time_projection, vcenter_projection,
-                           with_label=True)
+            except pyrocko.pile.TooMany:
+                umin, umax = self.time_projection.get_out_range()
+                u = 0.5 * (umin + umax)
+                v0, _ = vcenter_projection.get_out_range()
+                label_bg = qg.QBrush(qg.QColor(255, 255, 255))
+                p.setPen(primary_pen)
+                draw_label(
+                    p, u, v0-10.,
+                    '%i Markers' % len(self.markers),
+                    label_bg, 'CB')
+
+                return
+
+            ndraw = 0
+            for marker in markers:
+                if marker.tmin < self.tmax and self.tmin < marker.tmax \
+                        and marker.kind in self.visible_marker_kinds:
+
+                    ndraw += 1
+                    marker.draw(
+                        p, self.time_projection, vcenter_projection,
+                        with_label=True)
 
         def drawit(self, p, printmode=False, w=None, h=None):
             """This performs the actual drawing."""
@@ -2839,6 +2860,8 @@ def MakePileViewerMainClass(base):
                 primary_color = (0, 0, 0)
             else:
                 primary_color = pyrocko.plot.tango_colors['aluminium5']
+
+            primary_pen = qg.QPen(qg.QColor(*primary_color))
 
             ax_h = float(self.ax_height)
 
@@ -2879,18 +2902,8 @@ def MakePileViewerMainClass(base):
                         p, self.time_projection, vcenter_projection)
 
                 self.draw_visible_markers(
-                    self.markers, p, vcenter_projection)
+                    p, vcenter_projection, primary_pen)
 
-                active_marker = self.get_active_event_marker()
-
-                if active_marker:
-                    self.draw_visible_markers(
-                        [active_marker], p, vcenter_projection)
-
-                self.draw_visible_markers(
-                    self.selected_markers(), p, vcenter_projection)
-
-                primary_pen = qg.QPen(qg.QColor(*primary_color))
                 p.setPen(primary_pen)
 
                 font = qg.QFont()
@@ -3139,10 +3152,14 @@ def MakePileViewerMainClass(base):
                                 self, p, trace,
                                 self.time_projection, trace_projection, 1.0)
 
-                        for marker in self.markers:
+                        for marker in self.markers.with_key_in(
+                                self.tmin - self.markers_deltat_max,
+                                self.tmax):
+
                             if marker.tmin < self.tmax \
                                     and self.tmin < marker.tmax \
-                                    and marker.kind in self.visible_marker_kinds:
+                                    and marker.kind \
+                                    in self.visible_marker_kinds:
                                 marker.draw_trace(
                                     self, p, trace, self.time_projection,
                                     trace_projection, 1.0)

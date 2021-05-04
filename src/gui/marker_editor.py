@@ -421,11 +421,14 @@ class MarkerTableModel(qc.QAbstractTableModel):
         '''Set a pile_viewer and connect to signals.'''
 
         self.pile_viewer = viewer
-        self.pile_viewer.markers_added.connect(
-                     self.markers_added)
-
-        self.pile_viewer.markers_removed.connect(
-                     self.markers_removed)
+        self.pile_viewer.begin_markers_add.connect(
+            self.begin_markers_add)
+        self.pile_viewer.end_markers_add.connect(
+            self.end_markers_add)
+        self.pile_viewer.begin_markers_remove.connect(
+            self.begin_markers_remove)
+        self.pile_viewer.end_markers_remove.connect(
+            self.end_markers_remove)
 
         self.pile_viewer.changed_marker_selection.connect(
                      self.update_distances_and_angles)
@@ -438,16 +441,16 @@ class MarkerTableModel(qc.QAbstractTableModel):
     def columnCount(self, parent):
         return len(_column_mapping)
 
-    def markers_added(self, istart, istop):
-        '''Insert rows into table.'''
-
+    def begin_markers_add(self, istart, istop):
         self.beginInsertRows(qc.QModelIndex(), istart, istop)
+
+    def end_markers_add(self):
         self.endInsertRows()
 
-    def markers_removed(self, i_from, i_to):
-        '''Remove rows from table.'''
+    def begin_markers_remove(self, istart, istop):
+        self.beginRemoveRows(qc.QModelIndex(), istart, istop)
 
-        self.beginRemoveRows(qc.QModelIndex(), i_from, i_to)
+    def end_markers_remove(self):
         self.endRemoveRows()
         self.marker_table_view.updateGeometries()
 
@@ -610,9 +613,7 @@ class MarkerTableModel(qc.QAbstractTableModel):
         istart = self.index(0, _column_mapping['Dist [km]'])
         istop = self.index(nmarkers-1, _column_mapping['Kagan Angle [deg]'])
 
-        self.dataChanged.emit(
-                  istart,
-                  istop)
+        self.dataChanged.emit(istart, istop)
 
     def done(self, index):
         self.dataChanged.emit(index, index)
@@ -740,13 +741,16 @@ class MarkerEditor(qw.QFrame):
     def set_selected_markers(self, selected, deselected):
         ''' set markers selected in viewer at selection in table.'''
 
-        selected_markers = []
-        for i in self.selection_model.selectedRows():
-            selected_markers.append(
-                self.pile_viewer.markers[
-                    self.proxy_filter.mapToSource(i).row()])
+        to_source = self.proxy_filter.mapToSource
+        markers = self.pile_viewer.markers
 
-        self.pile_viewer.set_selected_markers(selected_markers)
+        for i in selected.indexes():
+            markers[to_source(i).row()].set_selected(True)
+
+        for i in deselected.indexes():
+            markers[to_source(i).row()].set_selected(False)
+
+        self.pile_viewer.update()
 
     def get_marker_model(self):
         '''Return :py:class:`MarkerTableModel` instance'''
@@ -765,8 +769,8 @@ class MarkerEditor(qw.QFrame):
              QItemSelectionModel.Current))
 
         for chunk in indices:
-            mi_start = self.marker_model.index(min(chunk), 0)
-            mi_stop = self.marker_model.index(max(chunk), 0)
+            mi_start = self.marker_model.index(chunk[0], 0)
+            mi_stop = self.marker_model.index(chunk[1]-1, 0)
             row_selection = self.proxy_filter.mapSelectionFromSource(
                 QItemSelection(mi_start, mi_stop))
             selections.merge(row_selection, selection_flags)
@@ -778,4 +782,6 @@ class MarkerEditor(qw.QFrame):
             self.selection_model.setCurrentIndex(
                 mi_start, selection_flags)
 
+        print('begin')
         self.selection_model.select(selections, selection_flags)
+        print('end')
