@@ -1806,8 +1806,9 @@ def MakePileViewerMainClass(base):
             print('> add_markers')
 
         def update_markers_deltat_max(self):
-            self.markers_deltat_max = max(
-                marker.tmax - marker.tmin for marker in self.markers)
+            if self.markers:
+                self.markers_deltat_max = max(
+                    marker.tmax - marker.tmin for marker in self.markers)
 
         def remove_marker(self, marker):
             '''
