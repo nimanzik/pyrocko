@@ -292,6 +292,9 @@ class Squirrel(Selection):
 
         self._cache_path = cache_path
 
+        self._sources = []
+        self._operators = []
+
         self._pile = None
         self._n_choppers_active = 0
 
@@ -626,6 +629,9 @@ class Squirrel(Selection):
         Selection.add(self, virtual_paths)
         self.get_database().dig(nuts_add)
         self._update_nuts()
+
+    def add_operator(self, op):
+        self._operators.append(op)
 
     def _load(self, check):
         for _ in io.iload(
@@ -2400,6 +2406,14 @@ class Squirrel(Selection):
             coverage.append(entry)
 
         return coverage
+
+    def iter_operator_mappings(self):
+        for operator in self._operators:
+            for mapping in operator.iter_mappings(self):
+                yield mapping
+
+    def get_operator_mappings(self):
+        return list(self.iter_operator_mappings())
 
     def print_tables(self, table_names=None, stream=None):
         '''
