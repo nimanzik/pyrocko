@@ -1794,7 +1794,6 @@ def MakePileViewerMainClass(base):
                 self.markers_deltat_max, marker.tmax - marker.tmin)
 
         def add_markers(self, markers):
-            print('< add_markers')
             if not self.markers:
                 self.begin_markers_add.emit(0, len(markers) - 1)
                 self.markers.insert_many(markers)
@@ -1803,7 +1802,6 @@ def MakePileViewerMainClass(base):
             else:
                 for marker in markers:
                     self.add_marker(marker)
-            print('> add_markers')
 
         def update_markers_deltat_max(self):
             if self.markers:
@@ -1832,6 +1830,9 @@ def MakePileViewerMainClass(base):
             :param markers: list of :py:class:`Marker` (or subclass)
                             instances
             '''
+
+            if markers is self.markers:
+                markers = list(markers)
 
             for marker in markers:
                 self.remove_marker(marker)
