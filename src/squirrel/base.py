@@ -46,8 +46,8 @@ def codes_fill(n, codes):
 
 c_kind_to_ncodes = {
     'station': 4,
-    'channel': 5,
-    'response': 5,
+    'channel': 6,
+    'response': 6,
     'waveform': 6,
     'event': 1,
     'waveform_promise': 6,
@@ -2408,9 +2408,16 @@ class Squirrel(Selection):
         return coverage
 
     def iter_operator_mappings(self):
+        available = [
+            separator.join(codes)
+            for codes in self.get_codes(kind=('channel'))]
+
+        for codes in available:
+            print(codes)
+
         for operator in self._operators:
-            for mapping in operator.iter_mappings(self):
-                yield mapping
+            for in_codes, out_codes in operator.iter_mappings(available):
+                yield operator, in_codes, out_codes
 
     def get_operator_mappings(self):
         return list(self.iter_operator_mappings())

@@ -9,9 +9,9 @@ import re
 import fnmatch
 from collections import defaultdict
 
-from ..model import QuantityType, separator
+from ..model import QuantityType
 
-from pyrocko.guts import Object, Tuple, String, Duration
+from pyrocko.guts import Object, String, Duration
 
 _compiled_patterns = {}
 
@@ -26,39 +26,97 @@ def compiled(pattern):
     return rpattern
 
 
+class Filtering(Object):
+
+    def filter(self, it):
+        return list(it)
+
+
+class RegexFiltering(Object):
+    pattern = String.T(default=r'(.*)\Z')
+
+    def __init__(self, **kwargs):
+        Filtering.__init__(self, **kwargs)
+        self._compiled_pattern = re.compile(self.pattern)
+
+    def filter(self, it):
+        return [
+            x for x in it if self._compiled_pattern.match(x)]
+
+
 class Grouping(Object):
-    pattern = re.compile(r'(.*)\Z')
 
     def key(self, codes):
-        return self.pattern.match(codes).groups()
+        return codes
+
+    def group(self, it):
+        grouped = defaultdict(list)
+        for codes in it:
+            k = self.key(codes)
+            grouped[k].append(codes)
+
+        return grouped
 
 
-class ComponentGrouping(Grouping):
-    pattern = re.compile(r'(.*\t.*\t.*\t.*\t.*).(\t.*)\Z')
+class RegexGrouping(Grouping):
+    pattern = String.T(default=r'(.*)\Z')
+
+    def __init__(self, **kwargs):
+        Grouping.__init__(self, **kwargs)
+        self._compiled_pattern = re.compile(self.pattern)
+
+    def key(self, codes):
+        return self._compiled_pattern.match(codes).groups()
+
+
+class ComponentGrouping(RegexGrouping):
+    pattern = String.T(default=r'(.*\t.*\t.*\t.*\t.*).(\t.*)\Z')
+
+
+class Naming(Object):
+    suffix = String.T(optional=True)
+
+    def get_name(self, base, **params):
+        return base + self.suffix.format(**params) if self.suffix else ''
+
+
+class RegexNaming(Naming):
+    pattern = String.T(default=r'(.*)\Z')
+    replacement = String.T(default=r'\1')
+
+    def __init__(self, **kwargs):
+        Naming.__init__(self, **kwargs)
+        self._compiled_pattern = re.compile(self.pattern)
+
+    def get_name(self, base, **params):
+        return self._compiled_pattern.sub(
+            self.replacement.format(**params), base) \
+                + self.suffix.format(**params) if self.suffix else ''
+
+
+class ReplaceComponentNaming(RegexNaming):
+    pattern = String.T(default=r'(.*\t.*\t.*\t.*\t.*).(\t.*)\Z')
+    replacement = String.T(default=r'\1{component}\2')
 
 
 class Operator(Object):
 
-    input_codes_pattern = Tuple.T(
-        6, String.T(), default=('*', '*', '*', '*', '*', '*'))
+    input_codes_filtering = Filtering.T(default=Filtering.D())
     input_codes_grouping = Grouping.T(default=Grouping.D())
+    output_codes_naming = Naming.T()
 
-    def iter_mappings(self, squirrel):
-        available = [
-            separator.join(codes)
-            for codes in squirrel.get_codes(kind='waveform')]
+    @property
+    def name(self):
+        return self.__class__.__name__
 
-        c_in_pat = compiled(self.input_codes_pattern)
-
-        filtered = [codes for codes in available if c_in_pat.match(codes)]
-
-        grouped = defaultdict(list)
-        for codes in filtered:
-            k = self.input_codes_grouping.key(codes)
-            grouped[k].append(codes)
-
+    def iter_mappings(self, available):
+        filtered = self.input_codes_filtering.filter(available)
+        grouped = self.input_codes_grouping.group(filtered)
         for k, group in grouped.items():
-            yield(group)
+            yield (group, self._get_output_names(group))
+
+    def _get_output_names(self, group):
+        return [self.output_codes_naming.get_name(codes) for codes in group]
 
     def get_channels(self, *args, **kwargs):
         pass
@@ -67,25 +125,42 @@ class Operator(Object):
         pass
 
 
-
 class Restitution(Operator):
-    target = QuantityType.T()
+    quantity = QuantityType.T(default='displacement')
+    output_codes_naming = Naming(suffix='R{quantity[0]}')
+
+    def _get_output_names(self, group):
+        return [
+            self.output_codes_naming.get_name(codes, quantity=self.quantity)
+            for codes in group]
 
 
 class Shift(Operator):
+    output_codes_naming = Naming(suffix='S')
     delay = Duration.T()
 
 
-class ToENZ(Operator):
+class Transform(Operator):
     input_codes_grouping = Grouping.T(default=ComponentGrouping.D())
+    output_codes_naming = ReplaceComponentNaming(suffix='T{system}')
+
+    def _get_output_names(self, group):
+        return [
+            self.output_codes_naming.get_name(
+                group[0], component=c, system=self.components.lower())
+            for c in self.components]
 
 
-class ToRTZ(Operator):
-    input_codes_grouping = Grouping.T(default=ComponentGrouping.D())
+class ToENZ(Transform):
+    components = 'ENZ'
 
 
-class ToLTQ(Operator):
-    input_codes_grouping = Grouping.T(default=ComponentGrouping.D())
+class ToRTZ(Transform):
+    components = 'RTZ'
+
+
+class ToLTQ(Transform):
+    components = 'LTQ'
 
 
 __all__ = [

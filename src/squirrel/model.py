@@ -325,6 +325,7 @@ class Channel(Content):
     station = String.T(default='', help='Station code (1-5)')
     location = String.T(default='', help='Location code (0-2)')
     channel = String.T(default='', help='Channel code (3)')
+    extra = String.T(default='', help='Extra/custom code')
 
     tmin = Timestamp.T(optional=True)
     tmax = Timestamp.T(optional=True)
@@ -342,7 +343,7 @@ class Channel(Content):
     def codes(self):
         return (
             self.agency, self.network, self.station, self.location,
-            self.channel)
+            self.channel, self.extra)
 
     @property
     def time_span(self):
@@ -482,6 +483,7 @@ class Response(Content):
     station = String.T(default='', help='Station code (1-5)')
     location = String.T(default='', help='Location code (0-2)')
     channel = String.T(default='', help='Channel code (3)')
+    extra = String.T(default='', help='Extra/custom code')
 
     tmin = Timestamp.T(optional=True)
     tmax = Timestamp.T(optional=True)
@@ -494,7 +496,7 @@ class Response(Content):
     def codes(self):
         return (
             self.agency, self.network, self.station, self.location,
-            self.channel)
+            self.channel, self.extra)
 
     @property
     def time_span(self):
@@ -743,7 +745,7 @@ class Nut(Object):
 
     @property
     def waveform_promise_kwargs(self):
-        agency, network, station, location, channel = \
+        agency, network, station, location, channel, extra = \
             self.codes.split(separator)
 
         return dict(
@@ -752,6 +754,7 @@ class Nut(Object):
             station=station,
             location=location,
             channel=channel,
+            extra=extra,
             tmin=self.tmin,
             tmax=self.tmax,
             deltat=self.deltat)
@@ -769,7 +772,7 @@ class Nut(Object):
 
     @property
     def channel_kwargs(self):
-        agency, network, station, location, channel \
+        agency, network, station, location, channel, extra \
             = self.codes.split(separator)
 
         return dict(
@@ -778,13 +781,14 @@ class Nut(Object):
             station=station,
             location=location,
             channel=channel,
+            extra=extra,
             tmin=tmin_or_none(self.tmin),
             tmax=tmax_or_none(self.tmax),
             deltat=self.deltat)
 
     @property
     def response_kwargs(self):
-        agency, network, station, location, channel \
+        agency, network, station, location, channel, extra \
             = self.codes.split(separator)
 
         return dict(
@@ -793,6 +797,7 @@ class Nut(Object):
             station=station,
             location=location,
             channel=channel,
+            extra=extra,
             tmin=tmin_or_none(self.tmin),
             tmax=tmax_or_none(self.tmax),
             deltat=self.deltat)
@@ -814,6 +819,7 @@ class Nut(Object):
             station=station,
             location=location,
             channel=channel,
+            extra=extra,
             tmin=self.tmin,
             tmax=self.tmax-self.deltat,
             deltat=self.deltat)
@@ -879,9 +885,11 @@ def make_station_nut(
 
 
 def make_channel_nut(
-        agency='', network='', station='', location='', channel='', **kwargs):
+        agency='', network='', station='', location='', channel='', extra='',
+        **kwargs):
 
-    codes = separator.join((agency, network, station, location, channel))
+    codes = separator.join(
+        (agency, network, station, location, channel, extra))
 
     return Nut(
         kind_id=CHANNEL,
@@ -890,9 +898,11 @@ def make_channel_nut(
 
 
 def make_response_nut(
-        agency='', network='', station='', location='', channel='', **kwargs):
+        agency='', network='', station='', location='', channel='', extra='',
+        **kwargs):
 
-    codes = separator.join((agency, network, station, location, channel))
+    codes = separator.join(
+        (agency, network, station, location, channel, extra))
 
     return Nut(
         kind_id=RESPONSE,
@@ -936,7 +946,7 @@ class DummyTrace(object):
 
     def __init__(self, nut):
         self.nut = nut
-        self._nslc = None
+        self._codes = None
 
     @property
     def tmin(self):
@@ -951,27 +961,39 @@ class DummyTrace(object):
         return self.nut.deltat
 
     @property
-    def nslc_id(self):
-        if self._nslc is None:
-            self._nslc = self.nut.codes_tuple[1:5]
+    def codes(self):
+        if self._codes is None:
+            self._codes = self.nut.codes_tuple
 
-        return self._nslc
+        return self._codes
+
+    @property
+    def nslc_id(self):
+        return self.codes[1:5]
+
+    @property
+    def agency(self):
+        return self.codes[0]
 
     @property
     def network(self):
-        return self.nslc_id[0]
+        return self.codes[1]
 
     @property
     def station(self):
-        return self.nslc_id[1]
+        return self.codes[2]
 
     @property
     def location(self):
-        return self.nslc_id[2]
+        return self.codes[3]
 
     @property
     def channel(self):
-        return self.nslc_id[3]
+        return self.codes[4]
+
+    @property
+    def extra(self):
+        return self.codes[5]
 
     def overlaps(self, tmin, tmax):
         return not (tmax < self.nut.tmin or self.nut.tmax < tmin)

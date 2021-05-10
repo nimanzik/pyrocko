@@ -8,7 +8,8 @@ from __future__ import absolute_import, print_function
 import logging
 
 from .. import common
-from pyrocko.squirrel.error import SquirrelError
+# from pyrocko.squirrel.error import SquirrelError
+from pyrocko.squirrel import model
 
 logger = logging.getLogger('psq.cli.update')
 
@@ -42,10 +43,10 @@ def call(parser, args):
     d = common.squirrel_query_from_arguments(args)
     squirrel = common.squirrel_from_selection_arguments(args)
 
-    if 'tmin' not in d or 'tmax' not in d:
-        raise SquirrelError('Time span required.')
+    tmin = d.get('tmin', model.g_tmin)
+    tmax = d.get('tmax', model.g_tmax)
 
-    squirrel.update(tmin=d['tmin'], tmax=d['tmax'])
+    squirrel.update(tmin=tmin, tmax=tmax)
     if args.promises:
         squirrel.update_waveform_promises()
 

@@ -6,7 +6,8 @@
 from __future__ import absolute_import, print_function
 
 from .. import common
-from pyrocko.squirrel.operators import Restitution, ToZEN
+from pyrocko.squirrel.operators import Restitution, ToENZ, ToRTZ, Shift
+from pyrocko.squirrel.model import separator
 
 
 guts_prefix = 'squirrel'
@@ -26,8 +27,14 @@ def call(parser, args):
     d = common.squirrel_query_from_arguments(args)
     d
     squirrel = common.squirrel_from_selection_arguments(args)
-    squirrel.add_operator(Restitution(target='displacement'))
-    squirrel.add_operator(ToZEN())
+    squirrel.add_operator(Restitution(quantity='velocity'))
+    squirrel.add_operator(ToENZ())
+    squirrel.add_operator(ToRTZ())
+    squirrel.add_operator(Shift(delay=100.))
 
-    for mapping in squirrel.get_operator_mappings():
-        print(mapping)
+    def scodes(codes):
+        return ','.join(c.replace(separator, '.') for c in codes)
+
+    for operator, in_codes, out_codes in squirrel.get_operator_mappings():
+        print('%s => %s => %s' % (
+            scodes(in_codes), operator.name, scodes(out_codes)))
