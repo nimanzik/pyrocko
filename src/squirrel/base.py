@@ -5,6 +5,7 @@
 
 from __future__ import absolute_import, print_function
 
+import time
 import sys
 import math
 import logging
@@ -2408,16 +2409,19 @@ class Squirrel(Selection):
         return coverage
 
     def iter_operator_mappings(self):
+        t0 = time.time()
         available = [
             separator.join(codes)
             for codes in self.get_codes(kind=('channel'))]
-
-        for codes in available:
-            print(codes)
+        t1 = time.time()
+        print('get_codes', t1-t0)
 
         for operator in self._operators:
+            t0 = time.time()
             for in_codes, out_codes in operator.iter_mappings(available):
                 yield operator, in_codes, out_codes
+            t1 = time.time()
+            print(operator.name, t1-t0)
 
     def get_operator_mappings(self):
         return list(self.iter_operator_mappings())

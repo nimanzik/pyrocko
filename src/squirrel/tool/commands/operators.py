@@ -5,6 +5,8 @@
 
 from __future__ import absolute_import, print_function
 
+import time
+
 from .. import common
 from pyrocko.squirrel.operators import Restitution, ToENZ, ToRTZ, Shift
 from pyrocko.squirrel.model import separator
@@ -35,6 +37,14 @@ def call(parser, args):
     def scodes(codes):
         return ','.join(c.replace(separator, '.') for c in codes)
 
+    t0 = time.time()
+    ops = squirrel.get_operator_mappings()
+    t1 = time.time()
+    ops2 = squirrel.get_operator_mappings()
+    t2 = time.time()
+
     for operator, in_codes, out_codes in squirrel.get_operator_mappings():
         print('%s => %s => %s' % (
             scodes(in_codes), operator.name, scodes(out_codes)))
+
+    print(t1-t0, t2-t1)
