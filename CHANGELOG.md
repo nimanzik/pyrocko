@@ -5,7 +5,9 @@ All notable changes to Pyrocko will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
-*empty*
+
+### Added
+- automap: Map add flags to customize plate plotting
 
 ## [2021.04.02]
 
