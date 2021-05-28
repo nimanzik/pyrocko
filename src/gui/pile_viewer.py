@@ -757,6 +757,7 @@ def MakePileViewerMainClass(base):
             self.floating_marker = None
             self.markers = pyrocko.pile.Sorted([], 'tmin')
             self.markers_deltat_max = 0.
+            self.n_selected_markers = 0
             self.all_marker_kinds = (0, 1, 2, 3, 4, 5)
             self.visible_marker_kinds = self.all_marker_kinds
             self.active_event_marker = None
@@ -1900,7 +1901,7 @@ def MakePileViewerMainClass(base):
                 elif marker is not None:
                     if not (mouse_ev.modifiers() & qc.Qt.ShiftModifier):
                         self.deselect_all()
-                    marker.set_selected(True)
+                    marker.selected = True
                     self.emit_selected_markers()
                     self.update()
                 else:
@@ -2125,7 +2126,7 @@ def MakePileViewerMainClass(base):
                 if icurrent < len(pmarkers):
                     self.deselect_all()
                     cmarker = pmarkers[icurrent]
-                    cmarker.set_selected(True)
+                    cmarker.selected = True
                     tgo = cmarker.tmin
                     if not self.tmin < tgo < self.tmax:
                         self.set_time_range(tgo-dt/2., tgo+dt/2.)
@@ -2168,7 +2169,7 @@ def MakePileViewerMainClass(base):
                                     isinstance(marker, EventMarker)):
 
                             self.deselect_all()
-                            marker.set_selected(True)
+                            marker.selected = True
                             tgo = t
                             break
                 else:
@@ -2183,7 +2184,7 @@ def MakePileViewerMainClass(base):
                                 (dir == 'p' or
                                     isinstance(marker, EventMarker)):
                             self.deselect_all()
-                            marker.set_selected(True)
+                            marker.selected = True
                             tgo = t
                             break
 
@@ -2209,14 +2210,14 @@ def MakePileViewerMainClass(base):
                     if ((self.tmin <= marker.tmin <= self.tmax or
                             self.tmin <= marker.tmax <= self.tmax) and
                             marker.kind in self.visible_marker_kinds):
-                        marker.set_selected(True)
+                        marker.selected = True
                     else:
-                        marker.set_selected(False)
+                        marker.selected = False
 
             elif keytext == 'A':
                 for marker in self.markers:
                     if marker.kind in self.visible_marker_kinds:
-                        marker.set_selected(True)
+                        marker.selected = True
 
             elif keytext == 'd':
                 self.deselect_all()
@@ -2349,6 +2350,8 @@ def MakePileViewerMainClass(base):
                 ibounds.append(len(self.markers))
 
             chunks = list(zip(ibounds[::2], ibounds[1::2]))
+            self.n_selected_markers = sum(
+                chunk[1] - chunk[0] for chunk in chunks)
             self.marker_selection_changed.emit(chunks)
 
         def toggle_marker_editor(self):
@@ -2814,57 +2817,53 @@ def MakePileViewerMainClass(base):
             for (itrack, istyle), traces in traces_by_style.items():
                 drawbox(itrack, istyle, traces)
 
-        def tobedrawn(self, markers, uminmax):
-            """Returns two lists of indices:
-            first indicates which markers should be labeled.
-            second indicates which markers should be drawn."""
-            times = [m.tmin for m in markers]
-            m_projections = num.array(list(map(self.time_projection, times)))
-            m_projections = num.floor(m_projections)
-            u, indx = num.unique(m_projections, return_index=True)
-            a = num.zeros(len(m_projections)+2)
-            umin, umax = uminmax
-            a[0] = umin
-            a[-1] = umax
-            a[1:-1] = m_projections
-            offsets = num.floor_divide(num.diff(a), 30.)
-            with num.errstate(invalid='ignore'):
-                offsets = num.divide(offsets, offsets)
-            congregated = num.zeros(len(a))
-            congregated[:-1] = offsets
-            congregated[1:] += offsets
-            congregated = num.divide(congregated, congregated)
-            with num.errstate(invalid='ignore'):
-                i_labels = num.where(congregated[1:-1] == 1)[0]
-
-            return i_labels, indx
-
         def draw_visible_markers(
                 self, p, vcenter_projection, primary_pen):
 
             try:
                 markers = self.markers.with_key_in_limited(
-                    self.tmin - self.markers_deltat_max, self.tmax, 1000)
+                    self.tmin - self.markers_deltat_max, self.tmax, 2000)
 
             except pyrocko.pile.TooMany:
-                umin, umax = self.time_projection.get_out_range()
-                u = 0.5 * (umin + umax)
+                tmin = self.markers[0].tmin
+                tmax = self.markers[-1].tmax
+                umin_view, umax_view = self.time_projection.get_out_range()
+                umin = max(umin_view, self.time_projection(tmin))
+                umax = min(umax_view, self.time_projection(tmax))
                 v0, _ = vcenter_projection.get_out_range()
                 label_bg = qg.QBrush(qg.QColor(255, 255, 255))
-                p.setPen(primary_pen)
+
+                p.save()
+
+                pen = qg.QPen(primary_pen)
+                pen.setWidth(2)
+                pen.setStyle(qc.Qt.DotLine)
+                # pat = [5., 3.]
+                # pen.setDashPattern(pat)
+                p.setPen(pen)
+
+                if self.n_selected_markers == len(self.markers):
+                    s_selected = ' (all selected)'
+                elif self.n_selected_markers > 0:
+                    s_selected = ' (%i selected)' % self.n_selected_markers
+                else:
+                    s_selected = ''
+
                 draw_label(
-                    p, u, v0-10.,
-                    '%i Markers' % len(self.markers),
-                    label_bg, 'CB')
+                    p, umin+10., v0-10.,
+                    '%i Markers' % len(self.markers) + s_selected,
+                    label_bg, 'LB')
+
+                line = qc.QLineF(umin, v0, umax, v0)
+                p.drawLine(line)
+                p.restore()
 
                 return
 
-            ndraw = 0
             for marker in markers:
                 if marker.tmin < self.tmax and self.tmin < marker.tmax \
                         and marker.kind in self.visible_marker_kinds:
 
-                    ndraw += 1
                     marker.draw(
                         p, self.time_projection, vcenter_projection,
                         with_label=True)
@@ -3603,13 +3602,13 @@ def MakePileViewerMainClass(base):
             '''
             self.deselect_all()
             for m in markers:
-                m.set_selected(True)
+                m.selected = True
 
             self.update()
 
         def deselect_all(self):
             for marker in self.markers:
-                marker.set_selected(False)
+                marker.selected = False
 
         def animate_picking(self):
             point = self.mapFromGlobal(qg.QCursor.pos())
@@ -3628,7 +3627,7 @@ def MakePileViewerMainClass(base):
                 self.picking_timer = None
                 if not abort:
                     self.add_marker(self.floating_marker)
-                    self.floating_marker.set_selected(True)
+                    self.floating_marker.selected = True
                     self.emit_selected_markers()
 
                 self.floating_marker = None
@@ -3648,7 +3647,7 @@ def MakePileViewerMainClass(base):
                 ftrack = self.track_to_screen.rev(point.y())
                 nslc_ids = self.get_nslc_ids_for_track(ftrack)
                 self.floating_marker = Marker(nslc_ids, t, t)
-                self.floating_marker.set_selected(True)
+                self.floating_marker.selected = True
 
                 self.picking_timer = qc.QTimer()
                 self.picking_timer.timeout.connect(

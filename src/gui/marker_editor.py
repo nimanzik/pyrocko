@@ -728,11 +728,17 @@ class MarkerEditor(qw.QFrame):
 
         for rsel in selected:
             for i in range(rsel.top(), rsel.bottom()+1):
-                markers[to_source(i)].set_selected(True)
+                marker = markers[to_source(i)]
+                if not marker.selected:
+                    marker.selected = True
+                    self.pile_viewer.n_selected_markers += 1
 
         for rsel in deselected:
             for i in range(rsel.top(), rsel.bottom()+1):
-                markers[to_source(i)].set_selected(False)
+                marker = markers[to_source(i)]
+                if marker.selected:
+                    marker.selected = False
+                    self.pile_viewer.n_selected_markers -= 1
 
         self.pile_viewer.update()
 

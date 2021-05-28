@@ -255,9 +255,6 @@ class Marker(object):
     def set_alerted(self, state):
         self.alerted = state
 
-    def set_selected(self, state):
-        self.selected = state
-
     def match_nsl(self, nsl):
         '''See documentation of :py:func:`pyrocko.util.match_nslc`'''
         patterns = ['.'.join(x[:3]) for x in self.nslc_ids]
@@ -363,11 +360,18 @@ class Marker(object):
         from .qt_compat import qc, qg
         from . import util as gui_util
 
-        if self.selected or self.alerted or not self.nslc_ids:
+        color = self.select_color(g_color_b)
+        pen = qg.QPen(qg.QColor(*color))
+        pen.setWidth(2)
+        p.setPen(pen)
 
-            color = self.select_color(g_color_b)
-            pen = qg.QPen(qg.QColor(*color))
-            pen.setWidth(2)
+        umin = time_projection(self.tmin)
+        umax = time_projection(self.tmax)
+        v0, v1 = y_projection.get_out_range()
+        line = qc.QLineF(umin-1, v0, umax+1, v0)
+        p.drawLine(line)
+
+        if self.selected or self.alerted or not self.nslc_ids:
             linepen = qg.QPen(pen)
             if self.selected or self.alerted:
                 linepen.setStyle(qc.Qt.CustomDashLine)
@@ -384,13 +388,11 @@ class Marker(object):
 
             def drawline(t):
                 u = time_projection(t)
-                v0, v1 = y_projection.get_out_range()
                 line = qc.QLineF(u, v0, u, v1)
                 p.drawLine(line)
 
             def drawtriangles(t):
                 u = time_projection(t)
-                v0, v1 = y_projection.get_out_range()
                 t = qg.QPolygonF(utriangle)
                 t.translate(u, v0)
                 p.drawConvexPolygon(t)
