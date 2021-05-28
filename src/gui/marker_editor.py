@@ -20,8 +20,10 @@ import logging
 
 from .marker import g_color_b
 
+
 def faint(c):
     return tuple(255 - (255 - x) * 0.2 for x in c)
+
 
 g_color_b_faint = [faint(c) for c in g_color_b]
 
@@ -451,11 +453,13 @@ class MarkerTableModel(qc.QAbstractTableModel):
 
         if role == qc.Qt.BackgroundRole:
             if marker.active or column == _column_mapping['T']:
-                return qg.QBrush(qg.QColor(*marker.select_color(g_color_b_faint)))
+                return qg.QBrush(
+                    qg.QColor(*marker.select_color(g_color_b_faint)))
 
         if role == qc.Qt.ForegroundRole:
             if marker.active or column == _column_mapping['T']:
-                return qg.QBrush(qg.QColor(*marker.select_color(g_color_b)))
+                return qg.QBrush(
+                    qg.QColor(*marker.select_color(g_color_b)))
 
         elif role in (qc.Qt.DisplayRole, qc.Qt.UserRole):
 
