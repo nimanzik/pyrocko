@@ -14,7 +14,6 @@ import calendar
 import math
 import fnmatch
 import fcntl
-import shlex
 import optparse
 import os.path as op
 import platform
@@ -1850,17 +1849,11 @@ class TableReader(object):
         if not line:
             self.eof = True
             return []
-        s = shlex.shlex(line, posix=True)
-        s.whitespace_split = True
-        s.whitespace = ' \t\n\r\f\v'  # compatible with re's \s
-        row = []
-        while True:
-            x = s.get_token()
-            if x is None:
-                break
-            row.append(x)
+        line.strip()
+        if line.startswith('#'):
+            return []
 
-        return row
+        return qsplit(line)
 
 
 def gform(number, significant_digits=3):
@@ -2245,3 +2238,86 @@ def mpl_show(plt):
         logger.warning('Cannot show() when using matplotlib "agg" backend')
     else:
         plt.show()
+
+
+g_re_qsplit = re.compile(
+    r'"([^"\\]*(?:\\.[^"\\]*)*)"|\'([^\'\\]*(?:\\.[^\'\\]*)*)\'|(\S+)')
+
+
+g_re_trivial = re.compile(r'[^\'"\s]+')
+g_re_escape_s = re.compile(r'([\\\'])')
+g_re_unescape_s = re.compile(r'\\([\\\'])')
+g_re_escape_d = re.compile(r'([\\"])')
+g_re_unescape_d = re.compile(r'\\([\\"])')
+
+
+def escape_s(s):
+    '''
+    Backslash-escape single-quotes and backslashes.
+
+    Example: ``Jack's`` => ``Jack\\'s``
+
+    '''
+    return g_re_escape_s.sub(r'\\\1', s)
+
+
+def unescape_s(s):
+    '''
+    Unescape backslash-escaped single-quotes and backslashes.
+
+    Example: ``Jack\\'s`` => ``Jack's``
+    '''
+    return g_re_unescape_s.sub(r'\1', s)
+
+
+def escape_d(s):
+    '''
+    Backslash-escape double-quotes and backslashes.
+
+    Example: ``"Hello \\O/"`` => ``\\"Hello \\\\O/\\"``
+    '''
+    return g_re_escape_d.sub(r'\\\1', s)
+
+
+def unescape_d(s):
+    '''
+    Unescape backslash-escaped double-quotes and backslashes.
+
+    Example:  ``\\"Hello \\\\O/\\"`` => ``"Hello \\O/"``
+    '''
+    return g_re_unescape_d.sub(r'\1', s)
+
+
+def qjoin_s(it):
+    '''
+    Join sequence of strings into a line, single-quoting non-trivial strings.
+
+    Example:  ``["55", "Sparrow's Island"]`` => ``"55 'Sparrow\\\\'s Island'"``
+    '''
+    return ' '.join(
+        w if g_re_trivial.fullmatch(w) else "'%s'" % escape_s(w) for w in it)
+
+
+def qjoin_d(it):
+    '''
+    Join sequence of strings into a line, double-quoting non-trivial strings.
+
+    Example:  ``['55', 'Pete "The Robot" Smith']`` =>
+    ``'55' "Pete \\\\"The Robot\\\\" Smith"'``
+    '''
+    return ' '.join(
+        w if g_re_trivial.fullmatch(w) else '"%s"' % escape_d(w) for w in it)
+
+
+def qsplit(s):
+    '''
+    Split line into list of strings, allowing for quoted strings.
+
+    Example:  ``"55 'Sparrow\\\\'s Island'"`` =>
+    ``["55", "Sparrow's Island"]``,
+    ``'55' "Pete \\\\"The Robot\\\\" Smith"'`` =>
+    ``['55', 'Pete "The Robot" Smith']``
+    '''
+    return [
+        (unescape_d(x[0]) or unescape_s(x[1]) or x[2])
+        for x in g_re_qsplit.findall(s)]

@@ -722,8 +722,8 @@ def MakePileViewerMainClass(base):
         begin_markers_remove = qc.pyqtSignal(int, int)
         end_markers_remove = qc.pyqtSignal()
 
-        changed_marker_selection = qc.pyqtSignal(list)
-        active_event_marker_changed = qc.pyqtSignal(int)
+        marker_selection_changed = qc.pyqtSignal(list)
+        active_event_marker_changed = qc.pyqtSignal()
 
         def __init__(self, pile, ntracks_shown_max, panel_parent, *args):
             if base == qgl.QGLWidget:
@@ -1311,22 +1311,20 @@ def MakePileViewerMainClass(base):
 
         def deactivate_event_marker(self):
             if self.active_event_marker:
-                self.active_event_marker.set_active(False)
+                self.active_event_marker.active = False
 
-            self.active_event_marker_changed.emit(-1)
+            self.active_event_marker_changed.emit()
             self.active_event_marker = None
 
         def set_active_event_marker(self, event_marker):
             if self.active_event_marker:
-                self.active_event_marker.set_active(False)
+                self.active_event_marker.active = False
 
             self.active_event_marker = event_marker
-            event_marker.set_active(True)
+            event_marker.active = True
             event = event_marker.get_event()
             self.set_origin(event)
-            i_active = self.markers.index(self.active_event_marker)
-
-            self.active_event_marker_changed.emit(i_active)
+            self.active_event_marker_changed.emit()
 
         def set_active_event(self, event):
             for marker in self.markers:
@@ -1818,10 +1816,13 @@ def MakePileViewerMainClass(base):
             if marker is self.active_event_marker:
                 self.deactivate_event_marker()
 
-            i = self.markers.index(marker)
-            self.begin_markers_remove.emit(i, i)
-            self.markers.remove_at(i)
-            self.end_markers_remove.emit()
+            try:
+                i = self.markers.index(marker)
+                self.begin_markers_remove.emit(i, i)
+                self.markers.remove_at(i)
+                self.end_markers_remove.emit()
+            except ValueError:
+                pass
 
         def remove_markers(self, markers):
             '''
@@ -1836,6 +1837,40 @@ def MakePileViewerMainClass(base):
 
             for marker in markers:
                 self.remove_marker(marker)
+
+            self.update_markers_deltat_max()
+
+        def remove_selected_markers(self):
+            def delete_segment(istart, iend):
+                self.begin_markers_remove.emit(istart, iend-1)
+                for _ in range(iend - istart):
+                    self.markers.remove_at(istart)
+
+                self.end_markers_remove.emit()
+
+            istart = None
+            ipos = 0
+            markers = self.markers
+            nmarkers = len(self.markers)
+            while ipos < nmarkers:
+                marker = markers[ipos]
+                if marker.is_selected():
+                    if marker is self.active_event_marker:
+                        self.deactivate_event_marker()
+
+                    if istart is None:
+                        istart = ipos
+                else:
+                    if istart is not None:
+                        delete_segment(istart, ipos)
+                        nmarkers -= ipos - istart
+                        ipos = istart - 1
+                        istart = None
+
+                ipos += 1
+
+            if istart is not None:
+                delete_segment(istart, ipos)
 
             self.update_markers_deltat_max()
 
@@ -2167,7 +2202,7 @@ def MakePileViewerMainClass(base):
                 self.setup_snufflings()
 
             elif key_event.key() == qc.Qt.Key_Backspace:
-                self.remove_markers(self.selected_markers())
+                self.remove_selected_markers()
 
             elif keytext == 'a':
                 for marker in self.markers:
@@ -2314,8 +2349,7 @@ def MakePileViewerMainClass(base):
                 ibounds.append(len(self.markers))
 
             chunks = list(zip(ibounds[::2], ibounds[1::2]))
-            print(chunks)
-            self.changed_marker_selection.emit(chunks)
+            self.marker_selection_changed.emit(chunks)
 
         def toggle_marker_editor(self):
             self.panel_parent.toggle_marker_editor()
@@ -3715,6 +3749,7 @@ def MakePileViewerMainClass(base):
         def set_visible_marker_kinds(self, kinds):
             self.deselect_all()
             self.visible_marker_kinds = tuple(kinds)
+            self.emit_selected_markers()
 
         def following(self):
             return self.follow_timer is not None \
@@ -3980,6 +4015,7 @@ class PileViewer(qw.QFrame):
     def __init__(
             self, pile,
             ntracks_shown_max=20,
+            marker_editor_sortable=True,
             use_opengl=False,
             panel_parent=None,
             *args):
@@ -3996,6 +4032,8 @@ class PileViewer(qw.QFrame):
                 pile,
                 ntracks_shown_max=ntracks_shown_max,
                 panel_parent=panel_parent)
+
+        self.marker_editor_sortable = marker_editor_sortable
 
         layout = qw.QGridLayout()
         self.setLayout(layout)
@@ -4237,7 +4275,9 @@ class PileViewer(qw.QFrame):
         return frame
 
     def marker_editor(self):
-        editor = pyrocko.gui.marker_editor.MarkerEditor(self)
+        editor = pyrocko.gui.marker_editor.MarkerEditor(
+            self, sortable=self.marker_editor_sortable)
+
         editor.set_viewer(self.get_view())
         editor.get_marker_model().dataChanged.connect(
             self.update_contents)
