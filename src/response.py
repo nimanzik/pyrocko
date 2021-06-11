@@ -344,10 +344,17 @@ class DigitalPoleZeroResponse(FrequencyResponse):
             self, zeros=aslist(zeros), poles=aslist(poles), constant=constant,
             deltat=deltat, **kwargs)
 
+    def check_sampling_rate(self):
+        if self.deltat == 0.0:
+            raise InvalidResponseError(
+                'Invalid digital response: sampling rate undefined')
+
     def get_fmax(self):
+        self.check_sampling_rate()
         return 0.5 / self.deltat
 
     def evaluate(self, freqs):
+        self.check_sampling_rate()
         return signal.freqz_zpk(
             self.zeros, self.poles, self.constant, freqs,
             fs=1.0/self.deltat)[1]
@@ -365,6 +372,7 @@ class DigitalPoleZeroResponse(FrequencyResponse):
             raise IsNotScalar()
 
     def to_digital(self, deltat):
+        self.check_sampling_rate()
         from scipy.signal import zpk2tf
 
         b, a = zpk2tf(self.zeros, self.poles, self.constant)
@@ -536,10 +544,18 @@ class DigitalFilterResponse(FrequencyResponse):
             self, b=aslist(b), a=aslist(a), deltat=float(deltat),
             drop_phase=drop_phase, **kwargs)
 
+    def check_sampling_rate(self):
+        if self.deltat == 0.0:
+            raise InvalidResponseError(
+                'Invalid digital response: sampling rate undefined')
+
     def get_fmax(self):
+        self.check_sampling_rate()
         return 0.5 / self.deltat
 
     def evaluate(self, freqs):
+        self.check_sampling_rate()
+
         ok = freqs <= 0.5/self.deltat
         coeffs = num.zeros(freqs.size, dtype=num.complex)
 
@@ -553,6 +569,8 @@ class DigitalFilterResponse(FrequencyResponse):
             return coeffs
 
     def filter(self, tr):
+        self.check_sampling_rate()
+
         from pyrocko import trace
         trace.assert_same_sampling_rate(self, tr)
         tr_new = tr.copy(data=False)

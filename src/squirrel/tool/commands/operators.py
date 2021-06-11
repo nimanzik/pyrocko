@@ -5,10 +5,10 @@
 
 from __future__ import absolute_import, print_function
 
-import time
-
+from pyrocko import util
 from .. import common
-from pyrocko.squirrel.operators import Restitution, ToENZ, ToRTZ, Shift
+from pyrocko.squirrel.operators import Restitution, ToENZ, ToRTZ, Shift, \
+    Operator, Composition
 from pyrocko.squirrel.model import separator
 
 
@@ -29,22 +29,28 @@ def call(parser, args):
     d = common.squirrel_query_from_arguments(args)
     d
     squirrel = common.squirrel_from_selection_arguments(args)
-    squirrel.add_operator(Restitution(quantity='velocity'))
-    squirrel.add_operator(ToENZ())
-    squirrel.add_operator(ToRTZ())
-    squirrel.add_operator(Shift(delay=100.))
+    # squirrel.add_operator(
+    #      Composition(ToRTZ(), Restitution(quantity='velocity')))
+    #squirrel.add_operator(Restitution(quantity='velocity'))
 
     def scodes(codes):
-        return ','.join(c.replace(separator, '.') for c in codes)
+        css = list(zip(*(c.split(separator) for c in codes)))
+        if sum(not all(c == cs[0] for c in cs) for cs in css) == 1:
+            return '.'.join(
+                cs[0] if all(c == cs[0] for c in cs) else '(%s)' % ','.join(cs)
+                for cs in css)
+        else:
+            return ', '.join(c.replace(separator, '.') for c in codes)
 
-    t0 = time.time()
-    ops = squirrel.get_operator_mappings()
-    t1 = time.time()
-    ops2 = squirrel.get_operator_mappings()
-    t2 = time.time()
+    tmin = util.str_to_time('2020-03-10 00:00:00')
+    tmax = tmin + 60.
 
     for operator, in_codes, out_codes in squirrel.get_operator_mappings():
-        print('%s => %s => %s' % (
-            scodes(in_codes), operator.name, scodes(out_codes)))
+        print('%s <- %s <- %s' % (
+            scodes(out_codes), operator.name, scodes(in_codes)))
 
-    print(t1-t0, t2-t1)
+        # trs = operator.get_waveforms(
+        #     squirrel, in_codes, out_codes, tmin=tmin, tmax=tmax)
+        #
+        # for tr in trs:
+        #     print(tr)

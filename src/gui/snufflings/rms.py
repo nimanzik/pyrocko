@@ -56,7 +56,7 @@ class RootMeanSquareSnuffling(Snuffling):
                         station=tr.station,
                         location=tr.location,
                         channel=tr.channel+'-RMS',
-                        tmin=tmin + 0.5*tinc,
+                        tmin=float(tmin + 0.5*tinc),
                         deltat=tinc,
                         ydata=num.zeros(n, dtype=num.float),
                         meta={'tabu': True})

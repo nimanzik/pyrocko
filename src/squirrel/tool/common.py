@@ -217,3 +217,27 @@ def squirrel_query_from_arguments(args):
         d['codes'] = tuple(args.codes.split('.'))
 
     return d
+
+
+class SquirrelCommand(object):
+
+    def add_parser(self, subparsers, *args, **kwargs):
+        return add_parser(subparsers, *args, **kwargs)
+
+    def add_selection_arguments(self, p):
+        return add_selection_arguments(p)
+
+    def add_query_arguments(self, p):
+        return add_query_arguments(p)
+
+    def squirrel_query_from_arguments(self, args):
+        return squirrel_query_from_arguments(args)
+
+    def squirrel_from_selection_arguments(self, args):
+        return squirrel_from_selection_arguments(args)
+
+    def fail(self, message):
+        raise error.SquirrelError(message)
+
+
+__all__ = ['SquirrelCommand']

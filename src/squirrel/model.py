@@ -394,6 +394,7 @@ class ResponseStage(Object):
     output_quantity = QuantityType.T(optional=True)
     output_sample_rate = Float.T(optional=True)
     elements = List.T(FrequencyResponse.T())
+    log = List.T(Tuple.T(3, String.T()))
 
     @property
     def stage_type(self):
@@ -491,6 +492,7 @@ class Response(Content):
     stages = List.T(ResponseStage.T())
 
     deltat = Float.T(optional=True)
+    log = List.T(Tuple.T(3, String.T()))
 
     @property
     def codes(self):
@@ -552,7 +554,7 @@ class Response(Content):
         elements.extend(
             stage.get_effective() for stage in self.stages)
 
-        return simplify_responses(elements)
+        return MultiplyResponse(responses=simplify_responses(elements))
 
 
 class Event(Content):

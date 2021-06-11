@@ -371,7 +371,7 @@ def load_response_information(
                     resps.append(channel.response.get_pyrocko_response(
                         '.'.join(nslc),
                         fake_input_units=fake_input_units,
-                        stages=stages))
+                        stages=stages).expect_one())
 
                     labels.append(
                         '%s (%s.%s.%s.%s, %s - %s%s)' % (
