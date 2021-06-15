@@ -631,6 +631,31 @@ class Squirrel(Selection):
         self.get_database().dig(nuts_add)
         self._update_nuts()
 
+    def add_waveforms(self, traces):
+
+        path = 'virtual:test'
+
+        nuts = []
+        for itr, tr in enumerate(traces):
+            tmin_seconds, tmin_offset = model.tsplit(tr.tmin)
+            tmax_seconds, tmax_offset = model.tsplit(tr.tmax)
+            nuts.append(model.Nut(
+                file_path=path,
+                file_format='virtual',
+                file_segment=itr,
+                file_element=0,
+                codes=separator.join(tr.codes),
+                tmin_seconds=tmin_seconds,
+                tmin_offset=tmin_offset,
+                tmax_seconds=tmax_seconds,
+                tmax_offset=tmax_offset,
+                deltat=tr.deltat,
+                kind_id=to_kind_id('waveform'),
+                content=tr))
+
+        io.backends.virtual.add_nuts(nuts)
+        self.add_virtual(nuts, path)
+
     def add_operator(self, op):
         self._operators.append(op)
 
@@ -1556,7 +1581,7 @@ class Squirrel(Selection):
         for codes, group in d.items():
             if len(group) > 1:
                 logger.warn(
-                    'Multiple entries matching codes %s'
+                    'Multiple entries matching codes: %s'
                     % '.'.join(codes.split(separator)))
 
     @filldocs
@@ -1663,7 +1688,7 @@ class Squirrel(Selection):
                 'No instrument response available.')
         elif len(responses) > 1:
             raise error.NotAvailable(
-                'Multiple instrument responses matching given constraints')
+                'Multiple instrument responses matching given constraints.')
 
         return responses[0]
 
@@ -1956,6 +1981,18 @@ class Squirrel(Selection):
 
         nuts = self.get_waveform_nuts(obj, tmin, tmax, time, codes)
         tmin, tmax, _ = self._get_selection_args(obj, tmin, tmax, time, codes)
+
+        self_tmin, self_tmax = self.get_time_span(
+            ['waveform', 'waveform_promise'])
+
+        if None in (self_tmin, self_tmax):
+            logger.warning(
+                'Content has undefined time span. No waveforms and no '
+                'waveform promises?')
+            return
+
+        tmin = tmin if tmin is not None else self_tmin
+        tmax = tmax if tmax is not None else self_tmax
 
         if load_data:
             traces = [

@@ -319,6 +319,8 @@ def iload(
                 nut.file_format = format_this
                 nut.file_mtime = mtime
                 nut.file_size = size
+                if nut.content is not None:
+                    nut.content._squirrel_key = nut.key
 
                 nuts.append(nut)
                 n_load += 1
@@ -331,6 +333,7 @@ def iload(
                         nut.file_path = path
                         nut.file_format = format_this
                         nut.file_mtime = mtime
+                        nut.file_size = size
 
                 database.dig(nuts)
                 database_modified = True

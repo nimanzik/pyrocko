@@ -13,7 +13,8 @@ from pyrocko.guts import Object, String, Timestamp, Float, Int, Unicode, \
     Tuple, List, StringChoice
 from pyrocko.model import Content
 from pyrocko.response import FrequencyResponse, MultiplyResponse, \
-    IntegrationResponse, DifferentiationResponse, simplify_responses
+    IntegrationResponse, DifferentiationResponse, simplify_responses, \
+    FrequencyResponseCheckpoint
 
 from .error import ConversionError
 
@@ -490,6 +491,7 @@ class Response(Content):
     tmax = Timestamp.T(optional=True)
 
     stages = List.T(ResponseStage.T())
+    checkpoints = List.T(FrequencyResponseCheckpoint.T())
 
     deltat = Float.T(optional=True)
     log = List.T(Tuple.T(3, String.T()))

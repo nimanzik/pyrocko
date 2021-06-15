@@ -1044,7 +1044,9 @@ class ResponseStage(Object):
                 'M/S**2': 'acceleration',
                 'V': 'voltage',
                 'COUNTS': 'counts',
-                'PA': 'pressure'}
+                'COUNT': 'counts',
+                'PA': 'pressure',
+                'RAD/S': 'rotation'}
 
             if unit is None:
                 return None
@@ -1055,7 +1057,10 @@ class ResponseStage(Object):
             else:
                 delivery.log.append((
                     'warning',
-                    'Units not supported by Squirrel framework: %s' % unit,
+                    'Units not supported by Squirrel framework: %s' % (
+                        unit.name.upper() + (
+                            ' (%s)' % unit.description
+                            if unit.description else '')),
                     context))
 
                 return 'unsupported_quantity(%s)' % unit
@@ -1335,16 +1340,22 @@ class Response(Object):
             for istage, stage in enumerate(self.stage_list):
                 delivery.extend(stage.get_squirrel_response_stage(context))
 
+            checkpoints = []
             if not delivery.errors:
                 all_responses = []
                 for sq_stage in delivery.payload:
                     all_responses.extend(sq_stage.elements)
 
-                delivery.extend_without_payload(
-                    self._sensitivity_checkpoints(all_responses, context))
+                checkpoints.extend(delivery.extend_without_payload(
+                    self._sensitivity_checkpoints(all_responses, context)))
 
             sq_stages = delivery.expect()
-            return Response(stages=sq_stages, log=delivery.log, **kwargs)
+
+            return Response(
+                stages=sq_stages,
+                log=delivery.log,
+                checkpoints=checkpoints,
+                **kwargs)
 
         elif self.instrument_sensitivity:
             raise NoResponseInformation(
@@ -1369,11 +1380,9 @@ class Response(Object):
             delivery.extend(self.instrument_sensitivity.get_pyrocko_response())
 
         delivery_cp = self._sensitivity_checkpoints(delivery.payload, context)
-        delivery.extend_without_payload(delivery_cp)
+        checkpoints = delivery.extend_without_payload(delivery_cp)
         if delivery.errors:
             return delivery
-
-        checkpoints = delivery_cp.payload
 
         if fake_input_units is not None:
             if not self.instrument_sensitivity or \

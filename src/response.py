@@ -356,8 +356,8 @@ class DigitalPoleZeroResponse(FrequencyResponse):
     def evaluate(self, freqs):
         self.check_sampling_rate()
         return signal.freqz_zpk(
-            self.zeros, self.poles, self.constant, freqs,
-            fs=1.0/self.deltat)[1]
+            self.zeros, self.poles, self.constant,
+            freqs*(2.*math.pi*self.deltat))[1]
 
     def is_scalar(self):
         return len(self.zeros) == 0 and len(self.poles) == 0
@@ -621,7 +621,6 @@ class MultiplyResponse(FrequencyResponse):
         if not fmaxs:
             return None
         else:
-            print(fmaxs)
             return min(fmaxs)
 
     def evaluate(self, freqs):
@@ -729,6 +728,8 @@ def simplify_responses(responses):
         if poles or zeros:
             out.insert(0, PoleZeroResponse(
                 poles=poles, zeros=zeros, constant=constant))
+        elif constant != 1.0:
+            out.insert(0, Gain(constant=constant))
 
         return out
 
@@ -742,8 +743,8 @@ def simplify_responses(responses):
     def combine_gains(responses):
         non_scalars, scalars = split(responses, lambda resp: resp.is_scalar())
         if scalars:
-            factor = num.product(resp.get_scalar() for resp in scalars)
-            yield Gain(factor)
+            factor = num.prod([resp.get_scalar() for resp in scalars])
+            yield Gain(constant=factor)
 
         for resp in non_scalars:
             yield resp

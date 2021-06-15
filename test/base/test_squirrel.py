@@ -957,6 +957,31 @@ class SquirrelTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(datadir)
 
+    def test_add_waveforms(self):
+        traces = []
+
+        ntraces = 10
+        nsamples = 3600
+        deltat = 1.0
+        tmin = util.str_to_time('2020-01-01 00:00:00')
+        for itrace in range(ntraces):
+            ctmin = tmin+itrace*nsamples*deltat
+            data = num.ones(nsamples)
+            traces.append(
+                trace.Trace(
+                    'N', 'STA', '', 'Z',
+                    tmin=ctmin, deltat=deltat, ydata=data))
+
+        tmax = traces[-1].tmax
+
+        database = squirrel.Database()
+        sq = squirrel.Squirrel(database=database)
+        handle = sq.add_waveforms(traces)
+        for tr in sq.get_waveforms(include_last=True):
+            print(tr)
+            assert tr.tmin == tmin and tr.tmax == tmax
+
+
 
 if __name__ == "__main__":
     unittest.main()
