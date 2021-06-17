@@ -371,7 +371,7 @@ class Database(object):
 
     def remove(self, path):
         '''
-        Prune content meta-inforamation about a given file.
+        Prune content meta-information about a given file.
 
         All content pieces belonging to file ``path`` are removed from the
         main database and any attached live selections (via database triggers).
@@ -379,6 +379,34 @@ class Database(object):
 
         self._conn.execute(
             'DELETE FROM files WHERE path = ?', (path,))
+
+    def remove_glob(self, pattern):
+        '''
+        Prune content meta-information about files matching given pattern.
+
+        All content pieces belonging to files who's pathes match the given
+        ``pattern`` are removed from the main database and any attached live
+        selections (via database triggers).
+        '''
+
+        return self._conn.execute(
+            'DELETE FROM files WHERE path GLOB ?', (pattern,)).rowcount
+
+    def _remove_volatile(self):
+        '''
+        Prune leftover volatile content from database.
+
+        If the cleanup handler of an attached selection is not called, e.g. due
+        to a crash or terminated process, volatile content will not be removed
+        properly. This method will delete such leftover entries.
+
+        This is a mainenance operatation which should only be called when no
+        apps are using the database because it would remove volatile content
+        currently used by the apps.
+        '''
+
+        return self._conn.execute(
+            'DELETE FROM files WHERE path LIKE "virtual:volatile:%"').rowcount
 
     def reset(self, path):
         '''
@@ -518,6 +546,20 @@ class Database(object):
         for row in self._conn.execute(sql, args):
             yield to_kind(row[0])
 
+    def iter_paths(self):
+        for row in self._conn.execute('''SELECT path FROM files'''):
+            yield row[0]
+
+    def iter_nnuts_by_file(self):
+        sql = '''
+            SELECT
+                path,
+                (SELECT COUNT(*) FROM nuts WHERE nuts.file_id = files.file_id)
+            FROM files
+        '''
+        for row in self._conn.execute(sql):
+            yield row
+
     def iter_kinds(self, codes=None):
         return self._iter_kinds(codes=codes)
 
@@ -526,6 +568,9 @@ class Database(object):
 
     def iter_counts(self, kind=None):
         return self._iter_counts(kind=kind)
+
+    def get_paths(self):
+        return list(self.iter_paths())
 
     def get_kinds(self, codes=None):
         return list(self.iter_kinds(codes=codes))
@@ -560,6 +605,9 @@ class Database(object):
         sql = '''SELECT COUNT(*) FROM nuts'''
         for row in self._conn.execute(sql):
             return row[0]
+
+    def get_nnuts_by_file(self):
+        return list(self.iter_nnuts_by_file())
 
     def get_total_size(self):
         sql = '''

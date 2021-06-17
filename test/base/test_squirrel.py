@@ -976,11 +976,13 @@ class SquirrelTestCase(unittest.TestCase):
 
         database = squirrel.Database()
         sq = squirrel.Squirrel(database=database)
-        handle = sq.add_waveforms(traces)
+        handle = sq.add_volatile_waveforms(traces)
         for tr in sq.get_waveforms(include_last=True):
             print(tr)
             assert tr.tmin == tmin and tr.tmax == tmax
 
+        sq.remove(handle)
+        assert len(sq.get_waveforms(tmin=tmin, tmax=tmax)) == 0
 
 
 if __name__ == "__main__":

@@ -7,6 +7,8 @@ from __future__ import absolute_import, print_function
 
 import hashlib
 import numpy as num
+from os import urandom
+from base64 import urlsafe_b64encode
 
 from pyrocko import util
 from pyrocko.guts import Object, String, Timestamp, Float, Int, Unicode, \
@@ -592,6 +594,10 @@ class Event(Content):
 
 def ehash(s):
     return hashlib.sha1(s.encode('utf8')).hexdigest()
+
+
+def random_name(n=8):
+    return urlsafe_b64encode(urandom(n)).rstrip(b'=').decode('ascii')
 
 
 class Nut(Object):

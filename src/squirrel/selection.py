@@ -148,6 +148,7 @@ class Selection(object):
         self._conn = self._database.get_connection()
         self._sources = []
         self._is_new = True
+        self._volatile_paths = []
 
         if persistent is not None:
             self._is_new = 1 == self._conn.execute(
@@ -178,6 +179,7 @@ class Selection(object):
 
     def __del__(self):
         if hasattr(self, '_conn') and self._conn:
+            self._cleanup()
             if not self._persistent:
                 self._delete()
             else:
@@ -206,6 +208,17 @@ class Selection(object):
         :returns: :py:class:`~pyrocko.squirrel.database.Database` object
         '''
         return self._database
+
+    def _cleanup(self):
+        '''
+        Perform cleanup actions before database connection is closed.
+
+        Removes volatile content from database.
+        '''
+
+        while self._volatile_paths:
+            path = self._volatile_paths.pop()
+            self._database.remove(path)
 
     def _delete(self):
         '''

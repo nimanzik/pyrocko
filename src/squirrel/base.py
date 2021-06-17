@@ -619,24 +619,35 @@ class Squirrel(Selection):
             virtual_paths = [virtual_paths]
 
         if virtual_paths is None:
-            nuts_add = []
-            virtual_paths = set()
-            for nut in nuts:
-                virtual_paths.add(nut.file_path)
-                nuts_add.append(nut)
-        else:
-            nuts_add = nuts
+            if not isinstance(nuts, list):
+                nuts = list(nuts)
+            virtual_paths = set(nut.file_path for nut in nuts)
 
         Selection.add(self, virtual_paths)
-        self.get_database().dig(nuts_add)
+        self.get_database().dig(nuts)
         self._update_nuts()
 
-    def add_waveforms(self, traces):
+    def add_volatile(self, nuts):
+        if not isinstance(nuts, list):
+            nuts = list(nuts)
 
-        path = 'virtual:test'
+        paths = list(set(nut.file_path for nut in nuts))
+        io.backends.virtual.add_nuts(nuts)
+        self.add_virtual(nuts, paths)
+        self._volatile_paths.extend(paths)
+
+    def add_volatile_waveforms(self, traces):
+        '''
+        Add in-memory waveforms which will be removed when the app closes.
+        '''
+
+        name = model.random_name()
+
+        path = 'virtual:volatile:%s' % name
 
         nuts = []
         for itr, tr in enumerate(traces):
+            assert tr.tmin <= tr.tmax
             tmin_seconds, tmin_offset = model.tsplit(tr.tmin)
             tmax_seconds, tmax_offset = model.tsplit(tr.tmax)
             nuts.append(model.Nut(
@@ -653,8 +664,8 @@ class Squirrel(Selection):
                 kind_id=to_kind_id('waveform'),
                 content=tr))
 
-        io.backends.virtual.add_nuts(nuts)
-        self.add_virtual(nuts, path)
+        self.add_volatile(nuts)
+        return path
 
     def add_operator(self, op):
         self._operators.append(op)
@@ -1987,9 +1998,8 @@ class Squirrel(Selection):
 
         if None in (self_tmin, self_tmax):
             logger.warning(
-                'Content has undefined time span. No waveforms and no '
-                'waveform promises?')
-            return
+                'No waveforms available.')
+            return []
 
         tmin = tmin if tmin is not None else self_tmin
         tmax = tmax if tmax is not None else self_tmax

@@ -30,7 +30,7 @@ class RootMeanSquareSnuffling(Snuffling):
         tinc = self.block_length
 
         tmin, tmax = self.get_selected_time_range(fallback=True)
-        n = int((tmax-tmin)/tinc)
+        n = max(2, int((tmax-tmin)/tinc))
 
         rms_by_nslc = {}
         for traces in self.chopper_selected_traces(
