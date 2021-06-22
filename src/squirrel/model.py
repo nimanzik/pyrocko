@@ -463,7 +463,7 @@ g_converters = {
 
 
 def response_converters(input_quantity, output_quantity):
-    if input_quantity is None:
+    if input_quantity is None or input_quantity == output_quantity:
         return []
 
     if output_quantity is None:

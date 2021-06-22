@@ -350,7 +350,8 @@ class FDSNSource(Source):
             [], virtual_paths=[self._source_id])
 
         responses_path = self._get_responses_path()
-        squirrel.add(responses_path, kinds=['response'])
+        if os.path.exists(responses_path):
+            squirrel.add(responses_path, kinds=['response'])
 
     def _get_constraint_path(self):
         return op.join(self._cache_path, self._hash, 'constraint.pickle')
@@ -449,15 +450,15 @@ class FDSNSource(Source):
         extra_args = {}
 
         if self.site in sites_not_supporting['startbefore']:
-            if constraint.tmin is not None:
+            if constraint.tmin is not None and constraint.tmin != g_tmin:
                 extra_args['starttime'] = constraint.tmin
-            if constraint.tmax is not None:
+            if constraint.tmax is not None and constraint.tmax != g_tmax:
                 extra_args['endtime'] = constraint.tmax
 
         else:
-            if constraint.tmin is not None:
+            if constraint.tmin is not None and constraint.tmin != g_tmin:
                 extra_args['endafter'] = constraint.tmin
-            if constraint.tmax is not None:
+            if constraint.tmax is not None and constraint.tmax != g_tmax:
                 extra_args['startbefore'] = constraint.tmax
 
         if self.site not in sites_not_supporting['includerestricted']:

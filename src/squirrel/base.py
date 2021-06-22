@@ -5,7 +5,6 @@
 
 from __future__ import absolute_import, print_function
 
-import time
 import sys
 import math
 import logging
@@ -295,6 +294,7 @@ class Squirrel(Selection):
 
         self._sources = []
         self._operators = []
+        self._operator_registry = {}
 
         self._pile = None
         self._n_choppers_active = 0
@@ -666,9 +666,6 @@ class Squirrel(Selection):
 
         self.add_volatile(nuts)
         return path
-
-    def add_operator(self, op):
-        self._operators.append(op)
 
     def _load(self, check):
         for _ in io.iload(
@@ -1486,7 +1483,8 @@ class Squirrel(Selection):
             total_size=self.get_total_size(),
             counts=self.get_counts(),
             time_spans=time_spans,
-            sources=[s.describe() for s in self._sources])
+            sources=[s.describe() for s in self._sources],
+            operators=[op.describe() for op in self._operators])
 
     def get_content(
             self,
@@ -1913,7 +1911,7 @@ class Squirrel(Selection):
             self, obj=None, tmin=None, tmax=None, time=None, codes=None,
             uncut=False, want_incomplete=True, degap=True, maxgap=5,
             maxlap=None, snap=None, include_last=False, load_data=True,
-            accessor_id='default'):
+            accessor_id='default', operator_params=None):
 
         '''
         Get waveforms matching given constraints.
@@ -1990,8 +1988,8 @@ class Squirrel(Selection):
         consumers with a different ``accessor_id``.
         '''
 
-        nuts = self.get_waveform_nuts(obj, tmin, tmax, time, codes)
-        tmin, tmax, _ = self._get_selection_args(obj, tmin, tmax, time, codes)
+        tmin, tmax, codes = self._get_selection_args(
+            obj, tmin, tmax, time, codes)
 
         self_tmin, self_tmax = self.get_time_span(
             ['waveform', 'waveform_promise'])
@@ -2003,6 +2001,19 @@ class Squirrel(Selection):
 
         tmin = tmin if tmin is not None else self_tmin
         tmax = tmax if tmax is not None else self_tmax
+
+        if codes is not None:
+            operator, (_, in_codes, out_codes) = self.get_operator_group(codes)
+            if operator is not None:
+                return operator.get_waveforms(
+                    self, in_codes, out_codes,
+                    tmin=tmin, tmax=tmax,
+                    uncut=uncut, want_incomplete=want_incomplete, degap=degap,
+                    maxgap=maxgap, maxlap=maxlap, snap=snap,
+                    include_last=include_last, load_data=load_data,
+                    accessor_id=accessor_id, params=operator_params)
+
+        nuts = self.get_waveform_nuts(obj, tmin, tmax, time, codes)
 
         if load_data:
             traces = [
@@ -2045,7 +2056,7 @@ class Squirrel(Selection):
             tinc=None, tpad=0.,
             want_incomplete=True, degap=True, maxgap=5, maxlap=None,
             snap=None, include_last=False, load_data=True,
-            accessor_id=None, clear_accessor=True):
+            accessor_id=None, clear_accessor=True, operator_params=None):
 
         '''
         Iterate window-wise over waveform archive.
@@ -2168,7 +2179,8 @@ class Squirrel(Selection):
                     degap=degap,
                     maxgap=maxgap,
                     maxlap=maxlap,
-                    accessor_id=accessor_id)
+                    accessor_id=accessor_id,
+                    operator_params=operator_params)
 
                 for tr in chopped:
                     tr.wmin = wmin
@@ -2455,23 +2467,48 @@ class Squirrel(Selection):
 
         return coverage
 
-    def iter_operator_mappings(self):
-        t0 = time.time()
+    def add_operator(self, op):
+        self._operators.append(op)
+
+    def update_operator_mappings(self):
         available = [
             separator.join(codes)
             for codes in self.get_codes(kind=('channel'))]
-        t1 = time.time()
-        print('get_codes', t1-t0)
 
         for operator in self._operators:
-            t0 = time.time()
-            for in_codes, out_codes in operator.iter_mappings(available):
+            operator.update_mappings(available, self._operator_registry)
+
+    def iter_operator_mappings(self):
+        for operator in self._operators:
+            for in_codes, out_codes in operator.iter_mappings():
                 yield operator, in_codes, out_codes
-            t1 = time.time()
-            print(operator.name, t1-t0)
 
     def get_operator_mappings(self):
         return list(self.iter_operator_mappings())
+
+    def get_operator(self, codes):
+        if isinstance(codes, tuple):
+            codes = separator.join(codes)
+        try:
+            return self._operator_registry[codes][0]
+        except KeyError:
+            return None
+
+    def get_operator_group(self, codes):
+        if isinstance(codes, tuple):
+            codes = separator.join(codes)
+        try:
+            return self._operator_registry[codes]
+        except KeyError:
+            return None, (None, None, None)
+
+    def iter_operator_codes(self):
+        for _, _, out_codes in self.iter_operator_mappings():
+            for codes in out_codes:
+                yield tuple(codes.split(separator))
+
+    def get_operator_codes(self):
+        return list(self.iter_operator_codes())
 
     def print_tables(self, table_names=None, stream=None):
         '''
@@ -2543,6 +2580,9 @@ class SquirrelStats(Object):
     sources = List.T(
         String.T(),
         help='Descriptions of attached sources.')
+    operators = List.T(
+        String.T(),
+        help='Descriptions of attached operators.')
 
     def __str__(self):
         kind_counts = dict(
@@ -2552,6 +2592,9 @@ class SquirrelStats(Object):
 
         ssources = '<none>' if not self.sources else '\n' + '\n'.join(
             '  ' + s for s in self.sources)
+
+        soperators = '<none>' if not self.operators else '\n' + '\n'.join(
+            '  ' + s for s in self.operators)
 
         def stime(t):
             return util.tts(t) if t is not None and t not in (
@@ -2579,11 +2622,12 @@ Total size of known files:     %s
 Number of index nuts:          %i
 Available content kinds:       %s
 Available codes:               %s
-Sources:                       %s''' % (
+Sources:                       %s
+Operators:                     %s''' % (
             self.nfiles,
             util.human_bytesize(self.total_size),
             self.nnuts,
-            stspans, scodes, ssources)
+            stspans, scodes, ssources, soperators)
 
         return s.lstrip()
 

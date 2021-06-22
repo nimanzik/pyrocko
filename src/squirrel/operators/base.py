@@ -5,14 +5,42 @@
 
 from __future__ import absolute_import, print_function
 
+import logging
 import re
 import fnmatch
-from collections import defaultdict
 
 from ..model import QuantityType, separator
 from .. import error
 
 from pyrocko.guts import Object, String, Duration, Float
+
+guts_prefix = 'squirrel.ops'
+
+logger = logging.getLogger('psq.ops')
+
+
+def odiff(a, b):
+    ia = ib = 0
+    only_a = []
+    only_b = []
+    while ia < len(a) or ib < len(b):
+        # TODO remove when finished with implementation
+        if ia > 0:
+            assert a[ia] > a[ia-1]
+        if ib > 0:
+            assert b[ib] > b[ib-1]
+
+        if ib == len(b) or (ia < len(a) and a[ia] < b[ib]):
+            only_a.append(a[ia])
+            ia += 1
+        elif ia == len(a) or (ib < len(b) and a[ia] > b[ib]):
+            only_b.append(b[ib])
+            ib += 1
+        elif a[ia] == b[ib]:
+            ia += 1
+            ib += 1
+
+    return only_a, only_b
 
 
 def _cglob_translate(creg):
@@ -68,17 +96,6 @@ class Grouping(Object):
     def key(self, codes):
         return codes
 
-    def group(self, it):
-        grouped = defaultdict(list)
-        for codes in it:
-            k = self.key(codes)
-            grouped[k].append(codes)
-
-        for k in grouped:
-            grouped[k] = tuple(grouped[k])
-
-        return grouped
-
 
 class RegexGrouping(Grouping):
     pattern = String.T(default=r'(.*)')
@@ -129,22 +146,67 @@ class Operator(Object):
     def __init__(self, **kwargs):
         Object.__init__(self, **kwargs)
         self._output_names_cache = {}
+        self._groups = {}
+        self._available = []
 
     @property
     def name(self):
         return self.__class__.__name__
 
-    def iter_mappings(self, available):
-        filtered = self.input_codes_filtering.filter(available)
-        grouped = self.input_codes_grouping.group(filtered)
-        for k, group in grouped.items():
-            yield (group, self._get_output_names_cached(group))
+    def describe(self):
+        return self.name
 
-    def _get_output_names_cached(self, group):
-        if group not in self._output_names_cache:
-            self._output_names_cache[group] = self._get_output_names(group)
+    def iter_mappings(self):
+        for k, group in self._groups.items():
+            if group[1] is None:
+                group[1] = sorted(group[0])
 
-        return self._output_names_cache[group]
+            yield (group[1], self._get_output_names(group[1]))
+
+    def update_mappings(self, available, registry):
+        available = list(available)
+        removed, added = odiff(self._available, available)
+
+        filt = self.input_codes_filtering.filter
+        gkey = self.input_codes_grouping.key
+        groups = self._groups
+
+        need_update = set()
+
+        def deregister(group):
+            for codes in group[2]:
+                del registry[codes]
+
+        def register(group):
+            for codes in group[2]:
+                if codes in registry:
+                    logger.warn('duplicate operator output codes: %s' % codes)
+                registry[codes] = (self, group)
+
+        for codes in filt(removed):
+            k = gkey(codes)
+            groups[k][0].remove(codes)
+            need_update.add(k)
+
+        for codes in filt(added):
+            k = gkey(codes)
+            if k not in groups:
+                groups[k] = [set(), None, ()]
+
+            groups[k][0].add(codes)
+            need_update.add(k)
+
+        for k in need_update:
+            group = groups[k]
+            deregister(group)
+            group[1] = tuple(sorted(group[0]))
+            if not group[1]:
+                del groups[k]
+            else:
+                group[2] = self._get_output_names(group[1])
+                register(group)
+
+        self._available = available
 
     def _get_output_names(self, group):
         return [self.output_codes_naming.get_name(codes) for codes in group]
@@ -201,7 +263,7 @@ class Restitution(Operator):
             self, squirrel, in_codes, out_codes, params, tmin, tmax, **kwargs):
 
         assert len(in_codes) == 1 and len(out_codes) == 1
-        in_codes_tup = in_codes[0].split(separator)
+        in_codes_tup = tuple(in_codes[0].split(separator))
 
         tpad = self.get_tpad(params)
 
@@ -215,7 +277,7 @@ class Restitution(Operator):
             resp = squirrel.get_response(
                 codes=in_codes_tup,
                 tmin=tmin_raw,
-                tmax=tmax_raw).get_effective()
+                tmax=tmax_raw).get_effective(self.quantity)
 
         except error.NotAvailable:
             return []
@@ -288,15 +350,15 @@ class Composition(Operator):
     def name(self):
         return '(%s ○ %s)' % (self.g.name, self.f.name)
 
-    def iter_mappings(self, available):
+    def iter_mappings(self):
         g_available = []
         deps = {}
-        for f_in_codes, f_out_codes in self.f.iter_mappings(available):
+        for f_in_codes, f_out_codes in self.f.iter_mappings():
             g_available.extend(f_out_codes)
             for codes in f_out_codes:
                 deps[codes] = f_in_codes
 
-        for g_in_codes, g_out_codes in self.g.iter_mappings(g_available):
+        for g_in_codes, g_out_codes in self.g.iter_mappings():
             gf_in_codes = []
             for codes in g_in_codes:
                 gf_in_codes.extend(deps[codes])
@@ -306,6 +368,7 @@ class Composition(Operator):
 
 __all__ = [
     'Operator',
+    'RestitutionParameters',
     'Restitution',
     'Shift',
     'ToENZ',

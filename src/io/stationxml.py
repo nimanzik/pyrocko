@@ -1359,8 +1359,8 @@ class Response(Object):
 
         elif self.instrument_sensitivity:
             raise NoResponseInformation(
-                'Only instrument sensitivity given. '
-                'Complete response required (%s).' % context)
+                'Only instrument sensitivity given (won\'t use it). (%s).'
+                % context)
         else:
             raise NoResponseInformation(
                 'Empty instrument response (%s).'

@@ -138,4 +138,4 @@ def iload(format, file_path, segment, content):
                         inut += 1
 
                     except stationxml.StationXMLError as e:
-                        logger.warn('Bad instrument response: %s' % str(e))
+                        logger.debug('Bad instrument response: %s' % str(e))
