@@ -626,7 +626,7 @@ steps:
   commands:
   - python setup.py sdist
   - cd maintenance\\conda\\
-  - conda run -n base conda-build --python 3.8 -b build
+  - conda run -n base conda-build --python 3.8 --no-anaconda-upload build
 
 ---
 
