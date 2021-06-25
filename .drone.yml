@@ -609,7 +609,12 @@ steps:
 - name: build
   commands:
   - cd maintenance\\conda\\
-  - conda run -n base bash build_packages_windows.sh dryrun
+  - conda run -n base bash build_packages_windows.sh upload
+  environment:
+    CONDA_USERNAME:
+      from_secret: conda-username
+    CONDA_PASSWORD:
+      from_secret: conda-password
 
 ---
 
