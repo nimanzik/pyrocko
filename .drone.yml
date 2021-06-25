@@ -174,10 +174,6 @@ kind: pipeline
 type: docker
 name: tests-base
 
-trigger:
-  branch:
-  - remove_me_again
-
 steps:
 
 - name: tests-base
@@ -223,10 +219,6 @@ steps:
 
 
 ---
-
-trigger:
-  branch:
-  - remove_me_again
 
 kind: pipeline
 type: docker
@@ -280,10 +272,6 @@ kind: pipeline
 type: docker
 name: tests-examples
 
-trigger:
-  branch:
-  - remove_me_again
-
 steps:
 - name: tests-examples
   image: pyrocko-nest
@@ -331,10 +319,6 @@ steps:
 kind: pipeline
 type: docker
 name: tests-gui
-
-trigger:
-  branch:
-  - remove_me_again
 
 steps:
 - name: tests-gui
@@ -624,9 +608,9 @@ platform:
 steps:
 - name: build
   commands:
-  - python setup.py sdist
   - cd maintenance\\conda\\
-  - conda run -n base conda-build --python 3.8 --no-anaconda-upload build
+  - conda build --python 3.8 --no-anaconda-upload build
+  - conda build purge
 
 ---
 
