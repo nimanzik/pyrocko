@@ -2,6 +2,7 @@ recursive-include prerequisites *
 recursive-include libmseed *.h *.c
 recursive-include extras *
 recursive-include src *.md
+recursive-include test *
 recursive-include src/ext/pyavl-1.12 *
 include maintenance/readme-pip.rst
 include *.md *.tar.gz *.cfg
