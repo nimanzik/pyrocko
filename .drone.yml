@@ -609,7 +609,10 @@ steps:
 - name: build
   commands:
   - cd maintenance\\conda\\
+  - conda build --python 3.6 --no-anaconda-upload build
+  - conda build --python 3.7 --no-anaconda-upload build
   - conda build --python 3.8 --no-anaconda-upload build
+  - conda build --python 3.9 --no-anaconda-upload build
   - conda build purge
 
 ---
