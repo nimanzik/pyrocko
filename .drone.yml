@@ -591,6 +591,26 @@ steps:
 ---
 
 kind: pipeline
+type: exec
+name: conda-packages-windows
+
+trigger:
+  branch:
+    - windows-conda
+
+platform:
+  os: windows
+
+steps:
+- name: build
+  commands:
+  - python setup.py sdist
+  - cd maintenance\\conda\\
+  - conda run -n base conda-build --python 3.8 build
+
+---
+
+kind: pipeline
 type: docker
 name: notify-hive
 
