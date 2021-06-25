@@ -5,7 +5,7 @@ package:
   version: {{ data.get('version') }}
 
 source:
-  url: ../../../dist/{{ data.name }}-{{ data.version.replace('.0', '.') }}.tar.gz
+  path: ../../..
 
 requirements:
   build:
