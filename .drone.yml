@@ -176,8 +176,7 @@ name: tests-base
 
 trigger:
   branch:
-    exclude:
-    - conda-packages-windows
+  - remove_me_again
 
 steps:
 
@@ -227,8 +226,7 @@ steps:
 
 trigger:
   branch:
-    exclude:
-    - conda-packages-windows
+  - remove_me_again
 
 kind: pipeline
 type: docker
@@ -284,8 +282,7 @@ name: tests-examples
 
 trigger:
   branch:
-    exclude:
-    - conda-packages-windows
+  - remove_me_again
 
 steps:
 - name: tests-examples
@@ -337,8 +334,7 @@ name: tests-gui
 
 trigger:
   branch:
-    exclude:
-    - conda-packages-windows
+  - remove_me_again
 
 steps:
 - name: tests-gui
@@ -386,8 +382,7 @@ name: tests-windows
 
 trigger:
   branch:
-    exclude:
-    - conda-packages-windows
+  - remove_me_again
 
 platform:
   os: windows
