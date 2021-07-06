@@ -28,7 +28,10 @@ META_KEYS = {
     'idas_version': 'iDASVersion',
     'precice_sampling_freq': 'Precise Sampling Frequency (Hz)',
     'receiver_gain': 'Receiver Gain',
-    'continuous_mode': 'Continuous Mode'
+    'continuous_mode': 'Continuous Mode',
+    'geo_lat': 'SystemInfomation.GPS.Latitude',
+    'geo_lat': 'SystemInfomation.GPS.Longitude',
+    'geo_elevation': 'SystemInfomation.GPS.Altitude'
 }
 
 
@@ -70,8 +73,11 @@ def iload(filename, load_data=True):
     for group in tdms.groups():
         for channel in group.channels():
 
+            meta_cha = meta.copy()
+
             assert int(channel.name) < 99999
             station = '%05i' % int(channel.name)
+            meta_cha['channel'] = int(channel.name)
             nsamples = channel._length
 
             tr = trace.Trace(
@@ -81,7 +87,7 @@ def iload(filename, load_data=True):
                 deltat=deltat,
                 tmin=tmin,
                 tmax=tmin + nsamples*deltat,
-                meta=meta)
+                meta=meta_cha)
 
             if load_data:
                 tr.set_ydata(channel[:])
