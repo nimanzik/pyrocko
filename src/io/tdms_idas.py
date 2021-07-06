@@ -8,24 +8,47 @@ from .io_common import FileLoadError
 logger = logging.getLogger(__name__)
 
 
+META_KEYS = {
+    'measure_length': 'MeasureLength[m]',
+    'start_position': 'StartPosition[m]',
+    'spatial_resolution': 'SpatialResolution[m]',
+    'fibre_index': 'FibreIndex',
+    'unit_calibration': 'Unit Calibration (nm)',
+    'start_distance': 'Start Distance (m)',
+    'stop_distance': 'Stop Distance (m)',
+    'normalization': 'Normalization',
+    'decimation_filter': 'Decimation Filter',
+    'gauge_length': 'GaugeLength',
+    'norm_offset': 'Norm Offset',
+    'source_mode': 'Source Mode',
+    'time_decimation': 'Time Decimation',
+    'zero_offset': 'Zero Offset (m)',
+    'p_parameter': 'P',
+    'p_coefficients': 'P Coefficients',
+    'idas_version': 'iDASVersion',
+    'precice_sampling_freq': 'Precise Sampling Frequency (Hz)',
+    'receiver_gain': 'Receiver Gain',
+    'continuous_mode': 'Continuous Mode'
+}
+
+
 def get_meta(tdms_properties):
-    deltat = 1. / tdms_properties['SamplingFrequency[Hz]']
-    tmin = tdms_properties['GPSTimeStamp'].astype(num.float) * 1e-6
+    prop = tdms_properties
 
-    fibre_extra = {
-        'fibre_length': tdms_properties.get(
-            'MeasureLength[m]', -1.),
-        'fibre_spatial_resolution': tdms_properties.get(
-            'SpatialResolution[m]', -1.),
-        'fibre_index': tdms_properties.get(
-            'FibreIndex', -1.),
-        'zero_offset': tdms_properties.get(
-            'Zero Offset (m)', -1.),
-    }
+    deltat = 1. / prop['SamplingFrequency[Hz]']
+    tmin = prop['GPSTimeStamp'].astype(num.float) * 1e-6
 
-    extra = ', '.join(['%s: %s' % (k, v) for k, v in fibre_extra.items()])
+    fibre_meta = {key: prop.get(key_map, -1)
+                  for key, key_map in META_KEYS.items()}
 
-    return deltat, tmin, extra
+    coeff = fibre_meta['p_coefficients']
+    coeff = tuple(map(float, coeff.split(';')))
+
+    gain = fibre_meta['receiver_gain']
+    gain = tuple(map(int, gain.split(';')))
+    fibre_meta['receiver_gain'] = coeff
+
+    return deltat, tmin, fibre_meta
 
 
 def iload(filename, load_data=True):
@@ -42,7 +65,7 @@ def iload(filename, load_data=True):
     except ValueError as e:
         raise FileLoadError('Cannot load %s: %s' % (filename, str(e)))
 
-    deltat, tmin, extra_str = get_meta(tdms.properties)
+    deltat, tmin, meta = get_meta(tdms.properties)
 
     for group in tdms.groups():
         for channel in group.channels():
@@ -58,7 +81,7 @@ def iload(filename, load_data=True):
                 deltat=deltat,
                 tmin=tmin,
                 tmax=tmin + nsamples*deltat,
-                extra=extra_str)
+                meta=meta)
 
             if load_data:
                 tr.set_ydata(channel[:])
