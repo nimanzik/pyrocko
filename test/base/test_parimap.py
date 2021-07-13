@@ -37,12 +37,24 @@ def imapemulation(function, *iterables):
 def work_parimap(x, y, pshared):
     icrash = pshared['icrash']
 
-    if x == icrash:
+    if x == icrash or x == icrash + 1:
+        print('crash', x, y)
         raise Crash(str((x, y)))
 
     a = random.random()
-    if a > 0.5:
-        time.sleep((a*0.01)**2)
+    if a > 0.0:
+        duration = (a*0.1)**2
+        time.sleep(duration)
+
+    return x+y
+
+
+def work_parimap_nowait(x, y, pshared):
+    icrash = pshared['icrash']
+
+    if x == icrash or x == icrash + 1:
+        print('crash', x, y)
+        raise Crash(str((x, y)))
 
     return x+y
 
@@ -80,13 +92,13 @@ class ParimapTestCase(unittest.TestCase):
 
         n = 1000
 
-        for i in range(5):
-            nprocs = random.randint(1, 10)
+        for i in range(100):
+            nprocs = random.randint(1, 100)
             nx = random.randint(0, n)
             ny = random.randint(0, n)
-            icrash = random.randint(0, n)
+            icrash = random.randint(0, n*2)
 
-            # print 'testing %i %i %i %i...' % (nprocs, nx, ny, icrash)
+            print('testing %i %i %i %i...' % (nprocs, nx, ny, icrash))
 
             I1 = parimap(
                 work_parimap, range(nx), range(ny),
@@ -95,7 +107,7 @@ class ParimapTestCase(unittest.TestCase):
                 eprintignore=Crash)
 
             I2 = imapemulation(
-                work_parimap, range(nx), range(ny),
+                work_parimap_nowait, range(nx), range(ny),
                 [dict(icrash=icrash)]*n)
 
             while True:
