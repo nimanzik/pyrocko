@@ -57,6 +57,13 @@ def add_parser(subparsers, *args, **kwargs):
         '--help', '-h',
         action='help',
         help='Show this help message and exit.')
+
+    p.add_argument(
+        '--loglevel', '-l',
+        choices=['critical', 'error', 'warning', 'info', 'debug'],
+        default='info',
+        help='Set logger level. Default: %(default)s')
+
     return p
 
 
