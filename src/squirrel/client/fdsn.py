@@ -465,7 +465,8 @@ class FDSNSource(Source):
             extra_args.update(
                 includerestricted=(
                     self.user_credentials is not None
-                    or self.auth_token is not None))
+                    or self.auth_token is not None
+                    or self.auth_token_path is not None))
 
         if self.query_args is not None:
             extra_args.update(self.query_args)
@@ -525,7 +526,7 @@ class FDSNSource(Source):
         if self.user_credentials is not None:
             d['user'], d['passwd'] = self.user_credentials
 
-        if self.auth_token is not None:
+        if self.auth_token is not None or self.auth_token_path is not None:
             d['token'] = self.get_auth_token()
 
         return d
@@ -646,7 +647,8 @@ class FDSNSource(Source):
             extra_args.update(
                 includerestricted=(
                     self.user_credentials is not None
-                    or self.auth_token is not None))
+                    or self.auth_token is not None
+                    or self.auth_token_path is not None))
 
         self._log_responses('querying...')
 
