@@ -31,7 +31,10 @@ META_KEYS = {
     'continuous_mode': 'Continuous Mode',
     'geo_lat': 'SystemInfomation.GPS.Latitude',
     'geo_lat': 'SystemInfomation.GPS.Longitude',
-    'geo_elevation': 'SystemInfomation.GPS.Altitude'
+    'geo_elevation': 'SystemInfomation.GPS.Altitude',
+
+    'channel': None,
+    'unit': None
 }
 
 
@@ -42,7 +45,8 @@ def get_meta(tdms_properties):
     tmin = prop['GPSTimeStamp'].astype(num.float) * 1e-6
 
     fibre_meta = {key: prop.get(key_map, -1)
-                  for key, key_map in META_KEYS.items()}
+                  for key, key_map in META_KEYS.items()
+                  if key_map is not None}
 
     coeff = fibre_meta['p_coefficients']
     coeff = tuple(map(float, coeff.split(';')))
@@ -50,6 +54,8 @@ def get_meta(tdms_properties):
     gain = fibre_meta['receiver_gain']
     gain = tuple(map(int, gain.split(';')))
     fibre_meta['receiver_gain'] = coeff
+
+    fibre_meta['unit'] = 'radians'
 
     return deltat, tmin, fibre_meta
 
