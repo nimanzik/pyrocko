@@ -324,6 +324,15 @@ class IOTestCase(unittest.TestCase):
         assert len(traces)
         assert traces[0].deltat == 1./1000
 
+    def testReadTDMSNative(self):
+        from pyrocko.io import tdms_idas
+        fpath = common.test_data_file('test_idas.tdms')
+
+        tdms = tdms_idas.TdmsReader(fpath)
+        props = tdms.get_properties()
+        data = tdms.get_data()
+        assert data.size > 0
+
 
 if __name__ == "__main__":
     util.setup_logging('test_io', 'warning')
