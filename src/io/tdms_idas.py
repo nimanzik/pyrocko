@@ -1,13 +1,11 @@
 import logging
-import os
+import os.path as op
 import struct
 import datetime
 import mmap
 import numpy as num
-import pandas as pd
 
 from pyrocko import trace
-from .io_common import FileLoadError
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +122,7 @@ class TdmsReader(object):
         self._raw_last_chunk = None
         self._raw2_last_chunk = None
 
-        self.file_size = os.path.getsize(filename)
+        self.file_size = op.getsize(filename)
         self._channel_length = None
         self._seg1_length = None
         self._seg2_length = None
@@ -137,7 +135,6 @@ class TdmsReader(object):
         # [string of length 4][int32][int32][int64][int64]
         fields = struct.unpack("<4siiQQ", lead_in)
 
-        # TODO: validate file
         if fields[0].decode() not in "TDSm":
             msg = "Not a TDMS file (TDSm tag not found)"
             raise (TypeError, msg)
@@ -149,7 +146,7 @@ class TdmsReader(object):
         # Make offsets relative to beginning of file:
         self.fileinfo["next_segment_offset"] += LEAD_IN_LENGTH
         self.fileinfo["raw_data_offset"] += LEAD_IN_LENGTH
-        self.fileinfo["file_size"] = os.path.getsize(self._tdms_file.name)
+        self.fileinfo["file_size"] = op.getsize(self._tdms_file.name)
 
         # TODO: Validate lead in:
         if self.fileinfo["next_segment_offset"] > self.file_size:
@@ -162,13 +159,21 @@ class TdmsReader(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self._tdms_file.close()
 
-    def _get_channel_length(self):
-        if not self._channel_length:
-            self._initialise_data()
+    @property
+    def channel_length(self):
+        if self._properties is None:
+            self.get_properties()
 
-        return self._channel_length
+        rdo = num.int(self.fileinfo["raw_data_offset"])
+        nch = num.int(self.n_channels)
+        nso = self.fileinfo["next_segment_offset"]
+        return num.int((nso - rdo) / nch / num.dtype(self._data_type).itemsize)
 
-    channel_length = property(_get_channel_length)
+    @property
+    def n_channels(self):
+        if self._properties is None:
+            self.get_properties()
+        return self.fileinfo['n_channels']
 
     def get_properties(self, mapped=False):
         """
@@ -177,8 +182,7 @@ class TdmsReader(object):
         # Check if already hold properties in memory
         if self._properties is None:
             self._properties = self._read_properties()
-        else:
-            return self._properties.loc[:, "Value"].to_dict()
+        return self._properties
 
     def _read_property(self):
         """
@@ -215,15 +219,13 @@ class TdmsReader(object):
 
         # loop through and read each property
         properties = [self._read_property() for _ in range(var)]
-        df = pd.DataFrame(properties)
-        df.columns = ["Property", "Type", "Value"]
-        df.set_index("Property", inplace=True)
+        properties = {prop: value for (prop, type, value) in properties}
 
         self._end_of_properties_offset = self._tdms_file.tell()
 
         self._read_chunk_size()
         # TODO: Add number of channels to properties
-        return df
+        return properties
 
     def _read_chunk_size(self):
         """Read the data chunk size from the TDMS file header."""
@@ -263,8 +265,8 @@ class TdmsReader(object):
             self._initialise_data()
         if first_ch is None or first_ch < 0:
             first_ch = 0
-        if last_ch is None or last_ch >= self.fileinfo["n_channels"]:
-            last_ch = self.fileinfo["n_channels"]
+        if last_ch is None or last_ch >= self.n_channels:
+            last_ch = self.n_channels
         else:
             last_ch += 1
         if last_s is None or last_s > self._channel_length:
@@ -293,8 +295,6 @@ class TdmsReader(object):
         ind_s = 0
         ind_e = ind_s + max(last_s_1a - first_s_1a, 0)
 
-        # data_1a = self._raw_data[:, first_blk:last_full_blk, first_ch:last_ch] \
-        #   .reshape((self._chunk_size*nchunk, nch), order='F')[first_s_1a:last_s_1a, :]
         d = self._raw_data[:, first_blk:last_full_blk, first_ch:last_ch]
         d.shape = (self._chunk_size * nchunk, nch)
         d.reshape((self._chunk_size * nchunk, nch), order="F")
@@ -375,7 +375,7 @@ class TdmsReader(object):
 
         dmap = mmap.mmap(self._tdms_file.fileno(), 0, access=mmap.ACCESS_READ)
         rdo = num.int(self.fileinfo["raw_data_offset"])
-        nch = num.int(self.fileinfo["n_channels"])
+        nch = num.int(self.n_channels)
 
         # TODO: Support streaming file type?
         # TODO: Is this a valid calculation for ChannelLength?
@@ -475,57 +475,6 @@ class TdmsReader(object):
         #                     ' supported yet')
 
 
-if __name__ == "__main__":
-    print("TDMS Reader demo.")
-
-    file_path = "path_to_tdms_file.tdms"
-
-    print("File: {0}".format(file_path))
-
-    tdms = TdmsReader(file_path)
-    props = tdms.get_properties()
-
-    zero_offset = props.get("Zero Offset (m)")
-    channel_spacing = props.get("SpatialResolution[m]") * props.get(
-        "Fibre Length Multiplier"
-    )
-    n_channels = tdms.fileinfo["n_channels"]
-    depth = zero_offset + num.arange(n_channels) * channel_spacing
-    fs = props.get("SamplingFrequency[Hz]")
-
-    print("Number of channels in file: {0}".format(n_channels))
-    print("Time samples in file: {0}".format(tdms.channel_length))
-    print("Sampling frequency (Hz): {0}".format(fs))
-
-    first_channel = 250
-    last_channel = 2275
-    first_time_sample = 0
-    last_time_sample = 3999
-
-    some_data = tdms.get_data(
-        first_channel, last_channel, first_time_sample, last_time_sample
-    )
-    print("Size of data loaded: {0}".format(some_data.shape))
-
-    import matplotlib.pyplot as plt
-
-    fig1 = plt.figure()
-    img1 = plt.imshow(
-        some_data,
-        aspect="auto",
-        interpolation="none",
-        extent=(
-            depth[first_channel],
-            depth[last_channel],
-            last_time_sample / fs,
-            first_time_sample / fs,
-        ),
-    )
-    plt.ylabel("Time (seconds)")
-    plt.xlabel("Depth (m)")
-    plt.show(block=False)
-
-
 META_KEYS = {
     'measure_length': 'MeasureLength[m]',
     'start_position': 'StartPosition[m]',
@@ -560,17 +509,23 @@ def get_meta(tdms_properties):
     prop = tdms_properties
 
     deltat = 1. / prop['SamplingFrequency[Hz]']
-    tmin = prop['GPSTimeStamp'].astype(num.float) * 1e-6
+    tmin = prop['GPSTimeStamp'].timestamp()
 
     fibre_meta = {key: prop.get(key_map, -1)
                   for key, key_map in META_KEYS.items()
                   if key_map is not None}
 
     coeff = fibre_meta['p_coefficients']
-    coeff = tuple(map(float, coeff.split('\t')))
+    try:
+        coeff = tuple(map(float, coeff.split('\t')))
+    except ValueError:
+        coeff = tuple(map(float, coeff.split(';')))
 
     gain = fibre_meta['receiver_gain']
-    gain = tuple(map(float, gain.split('\t')))
+    try:
+        gain = tuple(map(float, gain.split('\t')))
+    except ValueError:
+        gain = tuple(map(float, gain.split(';')))
     fibre_meta['receiver_gain'] = coeff
 
     fibre_meta['unit'] = 'radians'
@@ -579,44 +534,32 @@ def get_meta(tdms_properties):
 
 
 def iload(filename, load_data=True):
-    try:
-        from nptdms import TdmsFile
-    except ImportError:
-        raise FileLoadError('Could not import Python module nptdms.')
+    tdms = TdmsReader(filename)
+    deltat, tmin, meta = get_meta(tdms.get_properties())
 
-    try:
-        if load_data:
-            tdms = TdmsFile.read(filename)
-        else:
-            tdms = TdmsFile.read_metadata(filename)
-    except ValueError as e:
-        raise FileLoadError('Cannot load %s: %s' % (filename, str(e)))
+    data = tdms.get_data().T.copy() if load_data else None
+    nsamples = tdms.channel_length
 
-    deltat, tmin, meta = get_meta(tdms.properties)
+    for icha in range(tdms.n_channels):
+        meta_cha = meta.copy()
 
-    for group in tdms.groups():
-        for channel in group.channels():
+        assert icha < 99999
+        station = '%05i' % icha
+        meta_cha['channel'] = icha
 
-            meta_cha = meta.copy()
+        tr = trace.Trace(
+            network='DA',
+            station=station,
+            ydata=None,
+            deltat=deltat,
+            tmin=tmin,
+            tmax=tmin + nsamples*deltat,
+            meta=meta_cha)
 
-            assert int(channel.name) < 99999
-            station = '%05i' % int(channel.name)
-            meta_cha['channel'] = int(channel.name)
-            nsamples = channel._length
+        if data is not None:
+            tr.set_ydata(data[icha])
 
-            tr = trace.Trace(
-                network='DA',
-                station=station,
-                ydata=None,
-                deltat=deltat,
-                tmin=tmin,
-                tmax=tmin + nsamples*deltat,
-                meta=meta_cha)
-
-            if load_data:
-                tr.set_ydata(channel[:])
-
-            yield tr
+        yield tr
 
 
 def detect(first512):

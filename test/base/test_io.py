@@ -23,14 +23,6 @@ def rn(n):
     return ''.join([random.choice(abc) for i in range(n)])
 
 
-def has_nptdms():
-    try:
-        import nptdms  # noqa
-        return True
-    except ImportError:
-        return False
-
-
 class IOTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -316,21 +308,34 @@ class IOTestCase(unittest.TestCase):
         sx2 = guts.load_xml(string=s)
         assert sx.dump_xml() == sx2.dump_xml()
 
-    @unittest.skipIf(not has_nptdms(), 'nptdms not installed')
     def testReadTDMSiDAS(self):
+        from pyrocko.io import tdms_idas
         fpath = common.test_data_file('test_idas.tdms')
-        traces = io.load(fpath, 'tdms_idas')
 
-        assert len(traces)
+        traces = io.load(fpath, format='tdms_idas')
+        tdms = tdms_idas.TdmsReader(fpath)
+
+        assert len(traces) == tdms.n_channels
         assert traces[0].deltat == 1./1000
+        for tr in traces:
+            assert tr.ydata is not None
+            assert tr.ydata.size == tdms.channel_length
+            assert tr.ydata.data.contiguous
+
+        traces = io.load(fpath, format='tdms_idas', getdata=False)
+        assert len(traces) == tdms.n_channels
+        assert traces[0].deltat == 1./1000
+        for tr in traces:
+            assert tr.ydata is None
 
     def testReadTDMSNative(self):
         from pyrocko.io import tdms_idas
         fpath = common.test_data_file('test_idas.tdms')
 
         tdms = tdms_idas.TdmsReader(fpath)
-        props = tdms.get_properties()
+        tdms.get_properties()
         data = tdms.get_data()
+        print(tdms._channel_length)
         assert data.size > 0
 
 
