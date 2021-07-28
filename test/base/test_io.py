@@ -12,7 +12,7 @@ import shutil
 from functools import wraps
 
 from pyrocko import io, guts
-from pyrocko.io import FileLoadError, FileSaveError
+from pyrocko.io import FileLoadError
 from pyrocko.io import mseed, trace, util, suds, quakeml
 
 from .. import common
@@ -198,7 +198,9 @@ class IOTestCase(unittest.TestCase):
                     c, c, c, c, ydata=num.random.randint(
                         -200, 200, size=nsample).astype(dtype))
 
-                mseed_bytes = get_bytes([tr], record_length=record_length)
+                mseed_bytes = get_bytes(
+                    [tr],
+                    record_length=record_length, steim=2)
                 with tempfile.NamedTemporaryFile('wb') as f:
                     f.write(mseed_bytes)
                     f.flush()

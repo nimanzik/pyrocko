@@ -134,7 +134,7 @@ def save(traces, filename_template, additional={}, overwrite=True,
 tcs = {}
 
 
-def get_bytes(traces, dataquality='D', record_length=4096):
+def get_bytes(traces, dataquality='D', record_length=4096, steim=1):
     from pyrocko import mseed_ext
 
     assert record_length in VALID_RECORD_LENGTHS
@@ -158,7 +158,7 @@ def get_bytes(traces, dataquality='D', record_length=4096):
             tr.ydata.nbytes / (rl-MSEED_HEADER_BYTES)) * rl
         trtups.append(as_tuple(tr, dataquality))
 
-    return mseed_ext.mseed_bytes(trtups, nbytes_approx, record_length)
+    return mseed_ext.mseed_bytes(trtups, nbytes_approx, record_length, steim)
 
 
 def detect(first512):
