@@ -1,6 +1,6 @@
 from __future__ import division, print_function, absolute_import
 from pyrocko import trace, pile as genuine_pile, io, config, util
-from pyrocko.squirrel import pile as fake_pile
+# from pyrocko.squirrel import pile as fake_pile
 
 import unittest
 import numpy as num
@@ -41,7 +41,8 @@ def makeManyFiles(nfiles, nsamples, networks, stations, channels, tmin):
 class PileTestCase(unittest.TestCase):
 
     def testPileTraversal(self):
-        pile = fake_pile
+        # pile = fake_pile
+        pile = genuine_pile
 
         import shutil
         config.show_progress = False
