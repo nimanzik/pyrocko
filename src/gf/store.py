@@ -1557,11 +1557,15 @@ class Store(BaseStore):
 
             return store, 1
 
-    def phase_filename(self, phase_id):
+    def phase_filename(self, phase_id, attribute='phase'):
         check_string_id(phase_id)
-        return os.path.join(self.store_dir, 'phases', phase_id + '.phase')
+        return os.path.join(
+            self.store_dir, 'phases', phase_id + '.%s' % attribute)
 
-    def get_stored_phase(self, phase_id):
+    def get_phase_identifier(self, phase_id, attribute):
+        return '{}.{}'.format(phase_id, attribute)
+
+    def get_stored_phase(self, phase_def, attribute='phase'):
         '''
         Get stored phase from GF store.
 
@@ -1569,8 +1573,9 @@ class Store(BaseStore):
         :rtype: :py:class:`pyrocko.spit.SPTree`
         '''
 
+        phase_id = self.get_phase_identifier(phase_def, attribute)
         if phase_id not in self._phases:
-            fn = self.phase_filename(phase_id)
+            fn = self.phase_filename(phase_def, attribute)
             if not os.path.isfile(fn):
                 raise NoSuchPhase(phase_id)
 
@@ -1682,8 +1687,92 @@ class Store(BaseStore):
 
         return timing.evaluate(self.get_phase, args)
 
-    def make_timing_params(self, begin, end, snap_vred=True, force=False):
+    def get_interpolated_ray_attribute(self, phase_def, attribute, *args):
+        '''
+        Return interpolated store attribute
 
+        take_off
+        '''
+        return self.get_stored_phase(phase_def, attribute)(*args)
+
+    def make_interpolated_ray_attribute(self, attribute, force=False):
+        '''
+        Compute tables for selected ray attributes.
+
+        :param attribute: String, takeoff_angle/ incidence_angle
+
+        Tables are computed using the 1D earth model defined in
+        :py:attr:`~pyrocko.gf.meta.Config.earthmodel_1d` for each defined phase
+        in :py:attr:`~pyrocko.gf.meta.Config.tabulated_phases`.
+        '''
+
+        from pyrocko import cake
+        config = self.config
+
+        if not config.tabulated_phases:
+            return
+
+        mod = config.earthmodel_1d
+
+        if config.earthmodel_receiver_1d:
+            self.check_earthmodels(config)
+
+        if not mod:
+            raise StoreError('no earth model found')
+
+        for pdef in config.tabulated_phases:
+
+            phase_id = pdef.id
+            phases = pdef.phases
+            # horvels = pdef.horizontal_velocities
+
+            fn = self.phase_filename(phase_id, attribute)
+
+            if os.path.exists(fn) and not force:
+                logger.info('file already exists: %s' % fn)
+                continue
+
+            def evaluate(args):
+
+                if len(args) == 2:
+                    zr, zs, x = (config.receiver_depth,) + args
+                elif len(args) == 3:
+                    zr, zs, x = args
+                else:
+                    assert False
+
+                t = []
+                if phases:
+                    rays = mod.arrivals(
+                        phases=phases,
+                        distances=[x*cake.m2d],
+                        zstart=zs,
+                        zstop=zr)
+
+                    for ray in rays:
+                        t.append(getattr(ray, attribute)())
+
+                # for v in horvels:
+                #     t.append(x/(v*1000.))
+
+                if t:
+                    return min(t)
+                else:
+                    return None
+
+            logger.info('making "%s" table for phasegroup "%s"' %
+                        (attribute, phase_id))
+
+            ip = spit.SPTree(
+                f=evaluate,
+                ftol=1.,  # attribute tolerance how precise angles needed?
+                xbounds=num.transpose((config.mins, config.maxs)),
+                xtols=config.deltas)
+
+            util.ensuredirs(fn)
+            ip.dump(fn)
+
+    def make_timing_params(self, begin, end, snap_vred=True, force=False):
         '''
         Compute tight parameterized time ranges to include given timings.
 

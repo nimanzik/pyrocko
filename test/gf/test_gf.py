@@ -979,6 +979,43 @@ class GFTestCase(unittest.TestCase):
             ph = store.get_stored_phase(phase_id + '.lsd')
             assert not ph.check_holes()
 
+    def test_interpolated_attribute(self):
+        from time import time
+        attribute = 'takeoff_angle'
+        for typ in ['a']:
+            store_dir = self.get_regional_ttt_store_dir(typ)
+
+            phase_id = 'P'
+
+            args = (10*km, 100*km)
+
+            store = gf.Store(store_dir)
+            store.make_interpolated_ray_attribute(attribute)
+            t0 = time()
+            for i in range(100):
+                interpolated_attribute = store.get_interpolated_ray_attribute(
+                    phase_id, attribute, args)
+            t1 = time()
+            table_time = (t1 - t0) / 100
+            print('\nTable time', table_time)
+            print('Table angle', interpolated_attribute)
+            zr, zs, x = (store.config.receiver_depth,) + args
+            t2 = time()
+            for i in range(100):
+                rays = store.config.earthmodel_1d.arrivals(
+                    phases=phase_id,
+                    distances=[x * cake.m2d],
+                    zstart=zs,
+                    zstop=zr)
+            cake_attribute = min([getattr(ray, attribute)() for ray in rays])
+            t3 = time()
+            cake_time = (t3 - t2) / 100
+            print('Cake time', cake_time)
+            print('Cake angle', cake_attribute)
+            print('Speedup', cake_time / table_time)
+            self.assertTrue(
+                numeq(interpolated_attribute, cake_attribute, 0.001))
+
     def dummy_store(self):
 
         conf = gf.ConfigTypeA(
