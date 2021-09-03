@@ -58,6 +58,8 @@ gf_record_dtype = num.dtype([
     ('end_value', E + 'f4'),
 ])
 
+available_stored_tables = ['phase', 'takeoff_angle', 'incidence_angle']
+
 
 class SeismosizerErrorEnum:
     SUCCESS = 0
@@ -1687,24 +1689,38 @@ class Store(BaseStore):
 
         return timing.evaluate(self.get_phase, args)
 
-    def get_interpolated_ray_attribute(self, phase_def, attribute, *args):
+    def get_stored_attribute(self, phase_def, attribute, *args):
         '''
         Return interpolated store attribute
 
-        take_off
+        :param attribute: takeoff_angle / incidence_angle
+        :type attribute: str
+        :param \\*args: :py:class:`~pyrocko.gf.meta.Config` index tuple, e.g.
+            ``(source_depth, distance, component)`` as in
+            :py:class:`~pyrocko.gf.meta.ConfigTypeA`.
+        :type \\*args: tuple
         '''
-        return self.get_stored_phase(phase_def, attribute)(*args)
+        try:
+            return self.get_stored_phase(phase_def, attribute)(*args)
+        except NoSuchPhase:
+            raise StoreError(
+                'Interpolation table for %s does not exist!' % attribute)
 
-    def make_interpolated_ray_attribute(self, attribute, force=False):
+    def make_stored_table(self, attribute, force=False):
         '''
         Compute tables for selected ray attributes.
 
-        :param attribute: String, takeoff_angle/ incidence_angle
+        :param attribute: phase / takeoff_angle / incidence_angle
+        :type attribute: str
 
         Tables are computed using the 1D earth model defined in
         :py:attr:`~pyrocko.gf.meta.Config.earthmodel_1d` for each defined phase
         in :py:attr:`~pyrocko.gf.meta.Config.tabulated_phases`.
         '''
+
+        if attribute not in available_stored_tables:
+            raise StoreError(
+                'Cannot create attribute table for %s' % attribute)
 
         from pyrocko import cake
         config = self.config
@@ -1724,7 +1740,12 @@ class Store(BaseStore):
 
             phase_id = pdef.id
             phases = pdef.phases
-            # horvels = pdef.horizontal_velocities
+
+            if attribute == 'phase':
+                ftol = config.deltat * 0.5
+                horvels = pdef.horizontal_velocities
+            else:
+                ftol = 0.1
 
             fn = self.phase_filename(phase_id, attribute)
 
@@ -1750,10 +1771,16 @@ class Store(BaseStore):
                         zstop=zr)
 
                     for ray in rays:
-                        t.append(getattr(ray, attribute)())
+                        if attribute == 'phase':
+                            value = ray.t
+                        else:
+                            value = getattr(ray, attribute)()
 
-                # for v in horvels:
-                #     t.append(x/(v*1000.))
+                        t.append(value)
+
+                if attribute == 'phase':
+                    for v in horvels:
+                        t.append(x/(v*1000.))
 
                 if t:
                     return min(t)
@@ -1765,7 +1792,7 @@ class Store(BaseStore):
 
             ip = spit.SPTree(
                 f=evaluate,
-                ftol=1.,  # attribute tolerance how precise angles needed?
+                ftol=ftol,
                 xbounds=num.transpose((config.mins, config.maxs)),
                 xtols=config.deltas)
 
@@ -1864,72 +1891,29 @@ use `fomosto tttlsd` to fix holes.''' % w
         in :py:attr:`~pyrocko.gf.meta.Config.tabulated_phases`. The accuracy of
         the tablulated times is adjusted to the sampling rate of the store.
         '''
+        self.make_stored_table(attribute='phase', force=force)
 
-        from pyrocko import cake
-        config = self.config
+    def make_tat(self, force=False):
+        '''
+        Compute takeoff-angle tables.
 
-        if not config.tabulated_phases:
-            return
+        Takeoff-angle tables are computed using the 1D earth model defined in
+        :py:attr:`~pyrocko.gf.meta.Config.earthmodel_1d` for each defined phase
+        in :py:attr:`~pyrocko.gf.meta.Config.tabulated_phases`. The accuracy of
+        the tablulated times is adjusted to TODO hard-coded 0.1 degree.
+        '''
+        self.make_stored_table(attribute='takeoff_angle', force=force)
 
-        mod = config.earthmodel_1d
+    def make_iat(self, force=False):
+        '''
+        Compute incidence-angle tables.
 
-        if config.earthmodel_receiver_1d:
-            self.check_earthmodels(config)
-
-        if not mod:
-            raise StoreError('no earth model found')
-
-        for pdef in config.tabulated_phases:
-
-            phase_id = pdef.id
-            phases = pdef.phases
-            horvels = pdef.horizontal_velocities
-
-            fn = self.phase_filename(phase_id)
-
-            if os.path.exists(fn) and not force:
-                logger.info('file already exists: %s' % fn)
-                continue
-
-            def evaluate(args):
-
-                if len(args) == 2:
-                    zr, zs, x = (config.receiver_depth,) + args
-                elif len(args) == 3:
-                    zr, zs, x = args
-                else:
-                    assert False
-
-                t = []
-                if phases:
-                    rays = mod.arrivals(
-                        phases=phases,
-                        distances=[x*cake.m2d],
-                        zstart=zs,
-                        zstop=zr)
-
-                    for ray in rays:
-                        t.append(ray.t)
-
-                for v in horvels:
-                    t.append(x/(v*1000.))
-
-                if t:
-                    return min(t)
-                else:
-                    return None
-
-            logger.info('making travel time table for phasegroup "%s"' %
-                        phase_id)
-
-            ip = spit.SPTree(
-                f=evaluate,
-                ftol=config.deltat*0.5,
-                xbounds=num.transpose((config.mins, config.maxs)),
-                xtols=config.deltas)
-
-            util.ensuredirs(fn)
-            ip.dump(fn)
+        Incidence-angle tables are computed using the 1D earth model defined in
+        :py:attr:`~pyrocko.gf.meta.Config.earthmodel_1d` for each defined phase
+        in :py:attr:`~pyrocko.gf.meta.Config.tabulated_phases`. The accuracy of
+        the tablulated times is adjusted to TODO hard-coded 0.1 degree.
+        '''
+        self.make_stored_table(attribute='incidence_angle', force=force)
 
     def get_provided_components(self):
 
