@@ -154,7 +154,7 @@ def get_err_palette():
     return err_palette
 
 
-class MySlider(qw.QSlider):
+class QSliderNoWheel(qw.QSlider):
 
     def wheelEvent(self, ev):
         ev.ignore()
@@ -241,7 +241,7 @@ class MyValueEdit(qw.QLineEdit):
         self.setText(t)
 
 
-class ValControl(qc.QObject):
+class ValControl(qw.QWidget):
 
     valchange = qc.pyqtSignal(object, int)
 
@@ -262,7 +262,7 @@ class ValControl(qc.QObject):
             high_is_none=high_is_none,
             low_is_zero=low_is_zero)
         self.lvalue.setFixedWidth(100)
-        self.slider = MySlider(qc.Qt.Horizontal)
+        self.slider = QSliderNoWheel(qc.Qt.Horizontal)
         self.slider.setSizePolicy(
             qw.QSizePolicy(qw.QSizePolicy.Expanding, qw.QSizePolicy.Minimum))
         self.slider.setMaximum(10000)
@@ -412,18 +412,18 @@ class LinValControl(ValControl):
 class ColorbarControl(qw.QWidget):
 
     AVAILABLE_CMAPS = (
-        'viridis',
-        'plasma',
-        'magma',
         'seismic',
         'RdBu',
-        'Reds',
         'YlGn',
         'binary',
-        'copper'
+        'Reds',
+        'copper',
+        'viridis',
+        'plasma',
+        'magma'
     )
 
-    DEFAULT_CMAP = 'viridis'
+    DEFAULT_CMAP = 'seismic'
 
     cmap_changed = qc.pyqtSignal(str)
     show_absolute_toggled = qc.pyqtSignal(bool)
@@ -649,7 +649,12 @@ class ColorbarSlider(qw.QWidget):
         event.accept()
         if not self._sym_locked:
             return
-        delta = -event.angleDelta().y() / 5e3
+
+        if use_pyqt5:
+            delta = event.angleDelta().y()
+        else:
+            delta = event.delta()
+        delta = -delta / 5e3
         clip_min_new = max(self.clip_min + delta, 0.)
         clip_max_new = min(self.clip_max - delta, 1.)
         self._mouse_inside = True
