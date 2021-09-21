@@ -3543,7 +3543,8 @@ def MakePileViewerMainClass(base):
                                             if self.lowpass < 0.5/trace.deltat:
                                                 trace.lowpass(
                                                     4, self.lowpass,
-                                                    demean=False)
+                                                    demean=False,
+                                                    dtype=num.float32)
 
                                         if self.highpass is not None:
                                             if self.lowpass is None \
@@ -3554,7 +3555,8 @@ def MakePileViewerMainClass(base):
                                                         0.5/trace.deltat:
                                                     trace.highpass(
                                                         4, self.highpass,
-                                                        demean=False)
+                                                        demean=False,
+                                                        dtype=num.float32)
 
                             processed_traces.append(trace)
 
