@@ -1453,6 +1453,87 @@ class ExplosionSource(SourceWithDerivedMagnitude):
         return pmt.MomentTensor(m=pmt.symmat6(a, a, a, 0., 0., 0.))
 
 
+class ExplosionLineSource(ExplosionSource):
+
+    length = Float.T(
+        default=0.0,
+        help='length of the line source [m]')
+
+    azimuth = Float.T(
+        default=0.0,
+        help='azimuth direction, clockwise from north [deg]')
+
+    dip = Float.T(
+        default=0.,
+        help='dip direction, downward from horizontal [deg]')
+
+    anchor = StringChoice.T(
+        default='center',
+        choices=['center', 'start'],
+        help='anchor point of the line source, default \'center\''
+    )
+
+    spatial_oversample = Int.T(
+        default=1,
+        help='Spatial oversampling of the subsources in space'
+    )
+
+    explosion_speed = Float.T(
+        optional=True,
+        help='Propagation Speed of the Explosion in [m/s]'
+    )
+
+    explosion_acceleration = Float.T(
+        optional=True,
+        help='acceleration (> 0.0) or deceleration (< 0.0) of the explosion.'
+    )
+
+    def get_magnitude(self, store=None, target=None):
+        return self.magnitude
+
+    def discretize_basesource(self, store, target=None):
+        delta_spatial = num.min(store.config.deltas) / self.spatial_oversample
+        nsources = 2 * int(math.ceil(self.length / delta_spatial)) + 1
+
+        line_points_asc = num.linspace(0, self.length, nsources)
+        if self.anchor == 'center':
+            line_points = num.linspace(
+                -0.5 * self.length, 0.5 * self.length, nsources)
+        elif self.anchor == 'start':
+            line_points = line_points_asc
+        else:
+            raise ValueError('Bad anchor %s' % self.anchor)
+
+        sin_azi = math.sin(self.azimuth * d2r)
+        cos_azi = math.cos(self.azimuth * d2r)
+        sin_dip = math.sin(self.dip * d2r)
+        cos_dip = math.cos(self.dip * d2r)
+
+        points = num.zeros((nsources, 3))
+        points[:, 0] = self.north_shift + line_points * cos_azi * cos_dip
+        points[:, 1] = self.east_shift + line_points * sin_azi * cos_dip
+        points[:, 2] = self.depth + line_points * sin_dip
+
+        times = num.zeros(nsources)
+        if self.explosion_speed:
+            times = line_points_asc / self.explosion_speed
+            if self.explosion_acceleration:
+                times += num.sqrt(
+                    (2 * line_points_asc) / self.explosion_acceleration)
+
+        amplitudes = num.full(nsources, self.moment/nsources)
+
+        return meta.DiscretizedExplosionSource(
+            times=util.num_full(n, self.time),
+            lat=self.lat,
+            lon=self.lon,
+            north_shifts=points[:, 0],
+            east_shifts=points[:, 1],
+            depths=points[:, 2],
+            times=times,
+            m0s=amplitudes)
+
+
 class RectangularExplosionSource(ExplosionSource):
     '''
     Rectangular or line explosion source.
