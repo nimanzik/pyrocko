@@ -176,9 +176,9 @@ class PeterBird2003(PlatesDataset):
             data = []
             for line in f:
                 t = line.split()
-                s = t[1].lstrip(b':')
-                name1 = str(s[0:2].decode('ascii'))
-                name2 = str(s[3:5].decode('ascii'))
+                s = t[1].lstrip(b':').decode('ascii')
+                name1 = str(s[0:2])
+                name2 = str(s[3:5])
                 kind = s[2]
 
                 alon, alat, blon, blat = list(map(float, t[2:6]))
@@ -226,9 +226,9 @@ class PeterBird2003(PlatesDataset):
                 elif line.startswith(b' '):
                     data.append(list(map(float, line.split(b',')))[::-1])
                 else:
-                    s = line.strip()
-                    name1 = str(s[0:2].decode('ascii'))
-                    name2 = str(s[3:5].decode('ascii'))
+                    s = line.strip().decode('ascii')
+                    name1 = str(s[0:2])
+                    name2 = str(s[3:5])
                     kind = s[2]
 
         return boundaries
