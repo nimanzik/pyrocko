@@ -599,7 +599,22 @@ def ne_to_latlon(lat0, lon0, north_m, east_m):
 
 def azidist_to_latlon(lat0, lon0, azimuth_deg, distance_deg):
     '''
-    (Durchreichen??).
+    Absolute latitudes and longitudes are calculated from relative changes.
+
+    Convenience wrapper to :py:func:`azidist_to_latlon_rad` with azimuth and
+    distance given in degrees.
+
+    :param lat0: Latitude origin of the cartesian coordinate system.
+    :type lat0: float
+    :param lon0: Longitude origin of the cartesian coordinate system.
+    :type lon0: float
+    :param azimuth_deg: Azimuth from origin in degrees.
+    :type azimuth_deg: :py:class:`numpy.ndarray`, ``(N)``
+    :param distance_deg: Distances from origin in degrees.
+    :type distance_deg: :py:class:`numpy.ndarray`, ``(N)``
+
+    :return: Array with latitudes and longitudes
+    :rtype: :py:class:`numpy.ndarray`, ``(2xN)``
     '''
 
     return azidist_to_latlon_rad(
@@ -651,7 +666,7 @@ def azidist_to_latlon_rad(lat0, lon0, azimuth_rad, distance_rad):
     :param lat0: Latitude origin of the cartesian coordinate system.
     :param lon0: Longitude origin of the cartesian coordinate system.
     :param distance_rad: Distances from origin in radians.
-    :param azimuth_rad: Azimuth from radians.
+    :param azimuth_rad: Azimuth from origin radians.
     :type distance_rad: :py:class:`numpy.ndarray`, ``(N)``
     :type azimuth_rad: :py:class:`numpy.ndarray`, ``(N)``
     :type lat0: float
