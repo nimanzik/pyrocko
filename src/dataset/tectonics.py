@@ -175,17 +175,17 @@ class PeterBird2003(PlatesDataset):
         with open(fpath, 'rb') as f:
             data = []
             for line in f:
-                t = line.split()
-                s = t[1].lstrip(b':').decode('ascii')
-                name1 = str(s[0:2])
-                name2 = str(s[3:5])
-                kind = s[2]
+                lsplit = line.split()
+                name = lsplit[1].lstrip(b':').decode('ascii')
+                name1 = str(name[0:2])
+                name2 = str(name[3:5])
+                kind = name[2]
 
-                alon, alat, blon, blat = list(map(float, t[2:6]))
+                alon, alat, blon, blat = list(map(float, lsplit[2:6]))
                 mlat = (alat + blat) * 0.5
                 dlon = ((blon - alon) + 180.) % 360. - 180.
                 mlon = alon + dlon * 0.5
-                typ = str(t[14].strip(b':*').decode('ascii'))
+                typ = str(lsplit[14].strip(b':*').decode('ascii'))
 
                 if typ not in type_to_index:
                     ntyp += 1
